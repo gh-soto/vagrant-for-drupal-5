@@ -24,3 +24,5 @@ License? you may use this repo as you see fit (MIT license for my files, the deb
 /////////////////////////////////////////////////////
 
 http://127.0.0.1:8082  - vm localhost
+
+http://localhost:8082/phpmyadmin/  
