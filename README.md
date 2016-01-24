@@ -18,3 +18,9 @@ The user/password for phpmyadmin is ```root```/```asd123```.
 Special thanks to the authors of http://zgadzaj.com/how-to-install-php-53-and-52-together-on-ubuntu-1204. The deb file was compiled using their instructions.
 
 License? you may use this repo as you see fit (MIT license for my files, the deb and php.ini are not mine to grant them a license).
+
+
+
+/////////////////////////////////////////////////////
+
+http://127.0.0.1:8082  - vm localhost
