@@ -1,0 +1,9 @@
+; $Id: taxonomy_vocabulary_image.info,v 1.1.2.1.2.2 2007/06/18 23:07:07 dww Exp $
+name = Taxonomy Vocabulary Image
+description = Upload and associate images with taxonomy vocabulary.
+dependencies = taxonomy
+
+; Information added by drupal.org packaging script on 2007-06-19
+version = "5.x-1.x-dev"
+project = "taxonomy_vocabulary_image"
+

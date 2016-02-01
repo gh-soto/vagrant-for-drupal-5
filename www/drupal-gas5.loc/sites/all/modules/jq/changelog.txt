@@ -1,0 +1,15 @@
+// $Id: changelog.txt,v 1.9 2008/05/04 19:03:24 aaron Exp $
+
+2008-04-06
+add settings and invocation hooks
+
+2008-02-05
+ensured jq_add called multiple times passes through
+changed call to jq_add to pass any extra arguments
+removed already_loaded for this purpose
+separated function _jq_add for more control
+
+2008-01-24
+add jQ Bridge module for jCarousel support
+capitalization
+create jQ

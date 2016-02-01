@@ -1,0 +1,30 @@
+/**
+ * CHANGELOG for Ubercart Subscriptions module
+ */
+
+version 2008/04/11
+-- further transition to per-product configuration
+-- fixed bug in renew subscription function causing errors on renewal
+-- added locked attribute for subscriptions that disables edit/cancel/renew
+-- added option for enabing subscription management in user account
+  and for uc_subscriptions shortcut URL
+-- added compatibility for PayPal Buttons module
+-- changed subscription admin menu items to normal for store links
+-- PostgreSQL compatibilities fixes and installation support
+-- changed default setting for 'Remove subscription record at expiration' 
+  to false/off
+
+version 2008/04/04
+-- added option of whether the item quantity should be treated as
+ a multiplier of the contract length
+-- added generic subscription product feature
+-- added Workflow-ng integration for subscription events
+-- added support for credit card encryption
+-- transition from store-wide to per-product configuration through 
+ subscriptions as product features
+-- changed user profile subscriptions URL to avoid conflict with 
+ the Drupal node Subscriptions module
+
+version 2008/01/28
+-- initial version of uc_subscribe
+

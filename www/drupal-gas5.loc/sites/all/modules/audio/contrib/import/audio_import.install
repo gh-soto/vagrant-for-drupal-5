@@ -1,0 +1,11 @@
+<?php
+// $Id: audio_import.install,v 1.1.2.2 2007/08/06 03:02:56 drewish Exp $
+
+function audio_import_uninstall() {
+  variable_del('audio_import_path');
+}
+
+function audio_import_update_1() {
+  variable_del('audio_import_extensions');
+  return array();
+}

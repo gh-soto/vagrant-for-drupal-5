@@ -1,0 +1,492 @@
+<?php
+// $Id: taxonomy_vocabulary_image.module,v 1.1 2008/01/22 09:09:40 interlink\dmitryv Exp $ taxonomy_vocabulary_image.module
+
+/*
+** taxonomy_vocabulary_image.module:
+**   Simple module for providing an association between taxonomy vocabulary and
+**   images.
+*/
+
+
+// standard Drupal functions
+function taxonomy_vocabulary_image_perm() {
+  return array ('access taxonomy_vocabulary_images', 'administer taxonomy_vocabulary_images', 'can disable taxonomy_vocabulary_images');
+}
+
+
+/**
+ * Implementation of hook_help().
+ */
+function taxonomy_vocabulary_image_help($section = '') {
+  switch ($section) {
+    case 'admin/content/taxonomy/vocabulary_image':
+      return t('The taxonomy_vocabulary_image module allows site administrators to associate images with category terms.  Once defined, this association allows Drupal themes to display images with site content.  For example, this module might be used to display a penguin with content about Linux, and a cheeseburger with content about junk food.  To upload a new image for a specific term, click "upload image" next to the term.  To modify or delete and existing image, click "edit image".  To learn more about how to create vocabularies and terms, review the <a href="%taxonomy-help">taxonomy help page</a>.', array('%taxonomy-help' => url('admin/help/taxonomy')));
+    case 'admin/help#taxonomy_vocabulary_image':
+      return t('
+      <h3>Introduction</h3>
+      <p>The taxonomy_vocabulary_image module allows site administrators to associate images with category terms.  Once defined, this association allows Drupal themes to display images with site content.  For example, the taxonomy_vocabulary_image module might be used to display a penguin with content about Linux, and a cheeseburger with content about junk food.</p>
+      <p>The module allows both a one-to-one term-to-image relationship, and a many-to-one terms-to-image relationship.</p>
+      <p>The taxonomy_vocabulary_image module requires that the taxonomy module also be enabled.</p>
+      <h3>Configuration</h3>
+      <h4>Uploading images</h4>
+      <p>With the taxonomy_vocabulary_image module enabled, images can be uploaded and associated with category terms at \'administer >> categories >> images\'.  On that page you will find tables containing all your vocabularies and terms.  Next to each term is a link titled \'upload image\' which you can click to upload an image for that term.  After clicking that link, you will be brought to another page with a small \'Add images\' form.  Using the \'browse\' button you can select your image then click \'Save\'.
+      <p>Continue this process to upload appropriate images for your category terms.  Note that by default images will be displayed at the size they were uploaded.  Alternatively, you can go to \'administer >> settings >> taxonomy_vocabulary_image\' to force the display height and/or width of all taxonomy images.</p>
+      <h4>Permissions</h4>
+      <p>For your users to be able to view the images you have uploaded, you will need to give them the necessary permissions.  Only users with the \'access taxonomy images\' permission will see images.  If you wish to give your users the ability to disable the images, also give them the \'can disable taxonomy images\' permission.</p>
+      <p>A third permission, \'administer taxonomy images\', controls which users are allowed to configure taxonomy images.</p>
+      <h4>Recursive image display</h4>
+      <p>Taxonomy is a very powerful tool.  One of its features is providing the ability to create hierarchical vocabularies, with which you can build a tree of terms.  It is possible that an entire tree of terms, or even just a branch of terms, are all about a similar subject and should all be associated with the same image.  By going to \'administer >> settings >> taxonomy_vocabulary_image\', you can enable \'Recursive image disaply\'.  With this option enabled, you only need to configure an image for the parent term, and all children will automatically inheret the same image (unless they are manually configured to display an alternative image).</p>
+      <h3>Displaying images</h3>
+      <p>To actually display images from your theme, you will have to modify the theme to make a call to taxonomy_vocabulary_image_display().  When calling this function, you will need to pass in the taxonomy term for which an image should be displayed.  For example, from your theme\'s \'_node\' function you might do the following:
+<pre>
+  foreach (taxonomy_node_get_terms($node->nid) as $term) {
+    if ($image = taxonomy_vocabulary_image_display($term->tid)) {
+      $output .= "$image";
+    }
+</pre>
+');
+  }
+}
+
+
+/**
+ * Implementation of hook_menu().
+ */
+function taxonomy_vocabulary_image_menu($may_cache) {
+	
+  $items = array();
+
+  if ($may_cache) {
+    $items[] = array('path' => 'admin/content/taxonomy/image_vocabulary', 'title' => t('Category Voc.Img.'),
+      'callback' => 'taxonomy_vocabulary_image_admin',
+      'access' => user_access('administer taxonomy images'),
+      'type' => MENU_LOCAL_TASK,);
+    // Admin Settings
+    $items[]= array (
+      'path' => 'admin/settings/taxonomy_vocabulary_image',
+      'title' => t('Taxonomy Vocabulary Image'),
+      'callback' => 'drupal_get_form',
+      'callback arguments' => array('taxonomy_vocabulary_image_admin_settings'),
+      'access' => user_access('administer site configuration'),
+      'description' => t('Global configuration of taxonomy image functionality.'),
+      'type' => MENU_NORMAL_ITEM,
+    );
+  }
+	
+  return $items;
+}
+
+
+
+/**
+ * Administration Page
+ */
+function taxonomy_vocabulary_image_admin_settings() {
+  if (!file_check_directory(file_create_path(variable_get('taxonomy_vocabulary_image_path', 'category_pictures')), FILE_CREATE_DIRECTORY)) {
+    $error = theme('error', t('The picture directory does not exist, or is not writable.'));
+  }
+
+  $form['pictures'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Pictures'),
+  );
+  $form['pictures']['taxonomy_vocabulary_image_path'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Picture image path'),
+    '#default_value' => variable_get('taxonomy_vocabulary_image_path', 'category_pictures'),
+    '#size' => 45,
+    '#maxlength' => 255,
+    '#description' => t('Subdirectory in the directory "%dir" where category pictures will be stored.', array('%dir' => variable_get('file_directory_path', 'files') . '/')) . $error,
+  );
+  $form['pictures']['taxonomy_vocabulary_image_resize'] = array(
+    '#type' => 'radios',
+    '#title' => t('Picture resize'),
+    '#default_value' => variable_get('taxonomy_vocabulary_image_resize', 0),
+    '#options' => array(3 => 'Exact', 2 => 'Not less than', 1 => 'Not greater than', 0 => 'Disabled'),
+    '#description' => t('This option allows you to control the size of pictures displayed by this module.  If set to \'disabled\', pictures will not be resized, displayed exactly as they are uploaded.  If set to \'not greater than\', pictures larger than the specified size will be scaled down.  If set to \'not less than\', pictures smaller than the specified size will be scaled up.  If set to \'exact\', pictures will be resized to exactly the specified dimension(s).'),
+  );
+  $form['pictures']['taxonomy_vocabulary_image_height'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Picture height'),
+    '#default_value' => variable_get('taxonomy_vocabulary_image_height', ''),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t('Specify a height in pixels.  If left blank or set to 0 this field is ignored.'),
+  );
+  $form['pictures']['taxonomy_vocabulary_image_width'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Picture width'),
+    '#default_value' => variable_get('taxonomy_vocabulary_image_width', ''),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t('Specify a width in pixels.  If left blank or set to 0 this field is ignored.'),
+  );
+
+  return system_settings_form($form);
+}
+
+
+/**
+ * Download files
+ * 
+ * @return
+ *   array
+ */
+function taxonomy_vocabulary_image_file_download($file) {
+  if (user_access('access taxonomy images')) {
+    $path = file_create_path($file);
+    if (function_exists('mime_content_type')) {
+      if ($type =  mime_content_type($path))
+        return array("Content-type: $type");
+    }
+    // support for pre-PHP 4.3+
+    list($width, $height, $type, $attr) = getimagesize($path);
+    $types = array(
+      IMAGETYPE_GIF => 'image/gif',
+      IMAGETYPE_JPEG => 'image/jpeg',
+      IMAGETYPE_PNG => 'image/png',
+      IMAGETYPE_SWF => 'application/x-shockwave-flash',
+      IMAGETYPE_PSD => 'image/psd',
+      IMAGETYPE_BMP => 'image/bmp',
+      IMAGETYPE_TIFF_II => 'image/tiff',
+      IMAGETYPE_TIFF_MM  => 'image/tiff',
+      IMAGETYPE_JPC => 'application/octet-stream',
+      IMAGETYPE_JP2 => 'image/jp2',
+      IMAGETYPE_JPX => 'application/octet-stream',
+      IMAGETYPE_JB2 => 'application/octet-stream',
+      IMAGETYPE_SWC => 'application/x-shockwave-flash',
+      IMAGETYPE_IFF => 'image/iff',
+      IMAGETYPE_WBMP => 'image/vnd.wap.wbmp',
+      IMAGETYPE_XBM => 'image/xbm'
+    );
+    if (isset($types[$type])) {
+      return array('Content-type: '. $types[$type]);
+    }
+  }
+}
+
+/**
+ * taxonomy_vocabulary_image specific functions
+ */
+function taxonomy_vocabulary_image_admin() {
+
+  global $form_values;
+  $op = $_POST['op'];
+  $vid = isset($_POST['vid']) ? $_POST['vid'] : '';
+  // TODO: Use menus, not arg()
+  if (empty($op)) {
+    $op = arg(3);
+  }
+
+  switch ($op) {
+    case 'image_vocabulary':
+  	  if (arg(4) == 'add_vocabulary' || arg(4) == 'edit_vocabulary') { 
+        $output = drupal_get_form('taxonomy_vocabulary_image_form', (array)(_taxonomy_vocabulary_image_get_vocabulary(arg(5))));
+        break;
+      }
+      $output = taxonomy_vocabulary_image_overview();
+      break;
+    case t('Save'):
+      $output = _taxonomy_vocabulary_image_vocabulary_save($vid);
+      $output = taxonomy_vocabulary_image_overview();
+      break;
+    case t('Delete'):
+      $output = _taxonomy_vocabulary_image_vocabulary_delete($vid);
+      $output = taxonomy_vocabulary_image_overview();
+      break;
+    default:
+      $output = taxonomy_vocabulary_image_overview();
+  }
+	
+  print theme('page', $output);
+}
+
+
+
+/**
+ * Display list vocabulary
+ * 
+ * @return
+ *   string
+ */
+function taxonomy_vocabulary_image_overview() {
+  $output = '';
+  $header = array(t('name'), t('node types'), t('image'));
+  $vocabularies = taxonomy_get_vocabularies();
+  $types = array();
+  $rows = array();
+  foreach ($vocabularies as $vocabulary) {
+    foreach(explode(',', $vocabulary->nodes) as $type) {
+      $types[] = node_invoke($type, 'node_name');
+    }
+    $image_vocabulary = _taxonomy_vocabulary_image_vocabulary_display($vocabulary->vid) ? _taxonomy_vocabulary_image_vocabulary_display($vocabulary->vid) : '';
+    $vocabulary_data = 'vocabulary :' . $vocabulary->name .' ('. ( _taxonomy_vocabulary_image_vocabulary_exists($vocabulary->vid) ? l(t('edit image'), "admin/content/taxonomy/image_vocabulary/edit_vocabulary/$vocabulary->vid") : l(t('upload image'), "admin/content/taxonomy/image_vocabulary/add_vocabulary/$vocabulary->vid") ) .')<br />';
+	$rows[] = array(array('data' => $vocabulary_data, 'colspan' => 2), $image_vocabulary);
+  }
+  $output .= theme('table',$header , $rows);	
+  return $output;
+}
+
+
+/**
+ * Return vocabulary
+ * 
+ * @param $vid
+ *   Id vocabulary
+ * 
+ * @return
+ *   object
+ */
+
+function _taxonomy_vocabulary_image_get_vocabulary($vid) {
+  return db_fetch_object(db_query(
+  'SELECT d.name, 
+  		  d.description, 
+  		  d.vid, 
+  		  i.path 
+  		  FROM {vocabulary} d 
+  		  LEFT JOIN {vocabulary_image} i ON d.vid = i.vid 
+  		  WHERE d.vid = %d', $vid)
+  );
+}
+
+
+
+
+function taxonomy_vocabulary_image_form($edit = array()) {
+  $form['#method'] = 'post';
+  $form['#action'] = 0;
+  $form['#attributes'] = array('enctype' => 'multipart/form-data');
+  // A path may be set when the image doesn't exist if using recursion
+  if (!is_null($edit['path']) && _taxonomy_vocabulary_image_vocabulary_exists($edit['vid'])) {
+    $form['current_image'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Current Image'),
+    );
+    $form['current_image']['image'] = array(
+      '#value' => _taxonomy_vocabulary_image_vocabulary_display($edit['vid']) .'<br />'
+    );
+    $form['current_image']['delete'] = array(
+      '#type' => 'submit',
+      '#value' => t('Delete'),
+    );
+    drupal_set_title(t('Edit image'));
+  }
+  $form['new_image'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Upload new image'),
+  );
+	
+  if (!is_null($edit['vid'])) {
+  	$form['new_image']['path'] = array(
+	    '#type' => 'file',
+	    '#title' => t('Taxonomy image file'),
+	    '#size' => 40,
+	    '#description' => t("The image file you wish to associate with the '%vocabulary' vocabulary.", array('%vocabulary' => $edit['name'])),
+	  );
+  }
+  $form['new_image']['submit'] = array(
+	    '#type' => 'submit',
+	    '#value' => t('Save'),
+  );
+  
+  if (!is_null($edit['vid'])) {
+  	$form['new_image']['vid'] = array(
+      '#type' => 'hidden',
+      '#value' => $edit['vid'],
+    );
+  }
+
+  return $form;
+}
+
+
+
+function taxonomy_vocabulary_image_save($tid) {
+  $edit['tid'] = $tid;
+  $fields = array('tid', 'path');
+  if ($file = file_save_upload('path', file_create_path(variable_get('taxonomy_vocabulary_image_path', 'category_pictures')))) {
+    $edit['path'] = $file->filepath;
+
+    if ($old_image = db_fetch_object(db_query('SELECT tid FROM {term_image} WHERE tid = %d', $edit['tid']))) {
+      // delete old image before saving the new one
+      taxonomy_vocabulary_image_delete($old_image->tid);
+    }
+
+    foreach ($fields as $field) {
+      $values[] = (string)db_escape_string($edit[$field]);
+    }
+
+    db_query('INSERT INTO {term_image} (' .implode(', ', $fields). ') VALUES (\'' .implode('\', \'', $values). '\')');
+    cache_clear_all();
+
+    $message = t('Image uploaded.');
+  }
+  else if (!file_check_directory(file_create_path(variable_get('taxonomy_vocabulary_image_path', 'category_pictures')))) {
+    // we know waht's wrong, so generate a more useful error message
+    $message = theme('error', t('The category picture directory "%dir" does not exist, or is not writable.', array('%dir' => variable_get('file_directory_path', 'files'). '/' . variable_get('taxonomy_vocabulary_image_path', 'category_pictures'))));
+  }
+  else {
+    $message = theme('error', t('Image upload failed.'));
+  }
+  return drupal_set_message($message);
+}
+
+
+
+function _taxonomy_vocabulary_image_vocabulary_save($vid) {
+  $edit['vid'] = $vid;
+  $fields = array('vid', 'path');
+  if ($file = file_save_upload('path', file_create_path(variable_get('taxonomy_vocabulary_image_path', 'category_pictures')))) {
+    $edit['path'] = $file->filepath;
+    if ($old_image = db_fetch_object(db_query('
+    	SELECT 
+    		vid 
+    	FROM {vocabulary_image} 
+    	WHERE vid = %d', $edit['vid']))) {
+      // delete old image before saving the new one
+      _taxonomy_vocabulary_image_vocabulary_delete($old_image->vid);
+    }
+
+    foreach ($fields as $field) {
+      $values[] = (string)db_escape_string($edit[$field]);
+    }
+
+    db_query('
+    	INSERT INTO 
+    		{vocabulary_image} 
+    			(' .implode(', ', $fields). ') 
+    	VALUES (\'' .implode('\', \'', $values). '\')');
+    cache_clear_all();
+
+    $message = t('Image uploaded.');
+  }
+  else if (!file_check_directory(file_create_path(variable_get('taxonomy_vocabulary_image_path', 'category_pictures')))) {
+    // we know waht's wrong, so generate a more useful error message
+    $message = theme('error', t('The category picture directory "%dir" does not exist, or is not writable.', array('%dir' => variable_get('file_directory_path', 'files'). '/' . variable_get('taxonomy_vocabulary_image_path', 'category_pictures'))));
+  }
+  else {
+    $message = theme('error', t('Image upload failed.'));
+  }
+  return drupal_set_message($message);
+}
+
+
+
+function taxonomy_vocabulary_image_delete($tid) {
+  file_delete(db_result(db_query('SELECT path FROM {term_image} WHERE tid = %d', $tid)));
+  db_query('DELETE FROM {term_image} WHERE tid = %d', $tid);
+  cache_clear_all();
+  return drupal_set_message(t('Image deleted.'));
+}
+
+
+
+
+function _taxonomy_vocabulary_image_vocabulary_delete($vid) {
+  file_delete(db_result(db_query('
+  	SELECT 
+  		path 
+  	FROM 
+  		{vocabulary_image} 
+  	WHERE vid = %d', $vid)));
+  db_query('DELETE FROM {vocabulary_image} WHERE vid = %d', $vid);
+  cache_clear_all();
+  return drupal_set_message(t('Image deleted.'));
+}
+
+
+
+function _taxonomy_vocabulary_image_exists($tid) {
+  if (db_fetch_object(db_query('SELECT path FROM {term_image} WHERE tid = %d', $tid))) {
+    return 1;
+  }
+  return 0;
+}
+
+
+
+function _taxonomy_vocabulary_image_vocabulary_exists($vid) {
+  if (db_fetch_object(db_query('SELECT path FROM {vocabulary_image} WHERE vid = %d', $vid))) {
+    return 1;
+  }
+  return 0;
+}
+
+
+
+function _taxonomy_vocabulary_image_vocabulary_display($vid) {
+	global $user;
+  static $image = array();
+	
+  if (user_access('access taxonomy images') &&
+      !$user->taxonomy_vocabulary_image_disable_images) {
+    // do lookup, return full display path
+    if (!$image[$vid]->url) {
+      if ($image[$vid] = 
+      	db_fetch_object(
+      		db_query('
+      			SELECT 
+      				i.path,
+      				d.name 
+      			FROM {vocabulary_image} i 
+      			INNER JOIN {vocabulary} d 
+      			WHERE i.vid = d.vid AND i.vid = %d', $vid))) {
+        $image[$vid]->url = file_create_url($image[$vid]->path);
+      }
+    }
+
+    if ($image[$vid]->url) {
+      if (!$image[$vid]->width || !$image[$vid]->height) {
+        list($image[$vid]->width, $image[$vid]->height) = getimagesize($image[$vid]->path);
+        // handle image resizing
+        switch (variable_get('taxonomy_vocabulary_image_resize', 0)) {
+          case 3: // exact
+            if ($width = variable_get('taxonomy_vocabulary_image_width', 0))
+              $image[$vid]->width = $width;
+            if ($height = variable_get('taxonomy_vocabulary_image_height', 0))
+              $image[$vid]->height = $height;
+            break;
+          case 2: // not less than
+            if (($width = variable_get('taxonomy_vocabulary_image_width', 0)) &&
+                ($width > $image[$vid]->width)) {
+              $width_scale = $image[$vid]->width / $width;
+            }
+            if (($height = variable_get('taxonomy_vocabulary_image_height', 0)) &&
+                ($height > $image[$vid]->height)) {
+              $height_scale = $image[$vid]->height / $height;
+            }
+            if ($height_scale || $width_scale) {
+              if ($width_scale && $height_scale)
+                $scale = min($width_scale, $height_scale);
+              else
+                $scale = $width_scale ? $width_scale : $height_scale;
+              $image[$vid]->height = $image[$vid]->height / $scale;
+              $image[$vid]->width = $image[$tvd]->width / $scale;
+            }
+            break;
+          case 1: // not greater than
+            if (($width = variable_get('taxonomy_vocabulary_image_width', 0)) &&
+                ($width < $image[$vid]->width)) {
+              $width_scale = $image[$vid]->width / $width;
+            }
+            if (($height = variable_get('taxonomy_vocabulary_image_height', 0)) &&
+                ($height < $image[$vid]->height)) {
+              $height_scale = $image[$vid]->height / $height;
+            }
+            if ($height_scale || $width_scale) {
+              $scale = max($width_scale, $height_scale);
+              $image[$vid]->height = $image[$vid]->height / $scale;
+              $image[$vid]->width = $image[$vid]->width / $scale;
+            }
+            break;
+        }
+      }
+      $current = $image[$vid];
+      return "<img src='$current->url' width='$current->width' height='$current->height' alt='$current->name' $tags />";
+    }
+  }
+  return '';
+}
+
+

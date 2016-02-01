@@ -1,0 +1,168 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: audio-module\n"
+"POT-Creation-Date: \n"
+"PO-Revision-Date: 2007-07-31 19:23+0100\n"
+"Last-Translator: Sten Johnsen <sten@bedre-bilder.no>\n"
+"Language-Team: THINEA Webteknologi <sten@thinea.no>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Poedit-Language: Norwegian Bokmal\n"
+"X-Poedit-Country: NORWAY\n"
+
+#: audio_getid3.module:14
+msgid "The audio_getid3 module enhances the audio module to read and write metadata to and from audio files. "
+msgstr "audio_getID3 utvider lydmodulen til å lese og skrive metadata til og fra lydfiler."
+
+#: audio_getid3.module:15
+msgid "The module uses the <a href=\"!elink-www-getid3-org\">getID3 library</a> to read and write <a href=\"!elink-en-wikipedia-org\">ID3 tags</a> from the audio file. getID3 can read metadata from a many different audio and video formats giving the audio module a great deal of flexibility."
+msgstr "Modulen benytter <a href=\"!elink-www-getid3-org\">getID3 bibliotek</a> for å lese og skrive<a href=\"!elink-en-wikipedia-org\">ID3 tag'er</a> fra en lydfil. getID3 kan lese og skrive metadata til en rekke forskjellige audio- og videoformater og gir dermed lydmodulen stor fleksibilitet."
+
+#: audio_getid3.module:17
+msgid ""
+"<p>You can:</p>\r\n"
+"         <ul>\r\n"
+"            <li>download and install the <em>required</em> getID3 library from <a href=\"!elink-prdownloads-sourceforge-net\">getID3 sourceforge</a> page. Currently, the recommended version of the getID3 library is %recommended-version.</li>\r\n"
+"            <li>administer audio_getid3 module at <a href=\"!admin-settings-audio-getid3\">administer &gt;&gt; site configuration &gt;&gt; audio &gt;&gt; getid3</a>.</li>\r\n"
+"         </ul>"
+msgstr ""
+"<p>Du kan:</p>\r\n"
+"         <ul>\r\n"
+"            <li>laste ned og installere det <em>påkrevede</em> getID3 biblioteket fra <a href=\"!elink-prdownloads-sourceforge-net\">getID3 sourceforge</a> siden. For tiden er anbefalt versjon av getID3 biblioteket %recommended-version.</li>\r\n"
+"            <li>administrere audio_getid3 modulen på <a href=\"!admin-settings-audio-getid3\">Administrer &gt;&gt; Instillinger &gt;&gt; Audio &gt;&gt; getid3</a>.</li>\r\n"
+"         </ul>"
+
+#: audio_getid3.module:24
+msgid "For more information please read the configuration and customization handbook <a href=\"!audio\">Audio page</a>."
+msgstr "For mer informasjon, vennligst les håndboken om innstillinger og tilpasninger <a href=\"!audio\">Lydsiden</a>."
+
+#: audio_getid3.module:28
+#, fuzzy
+msgid "The audio module uses the getID3 library to read and write ID3 tags. This is not included as part of the module distribution."
+msgstr "Lydmodulen benytter getID3 biblioteket for å lese og skrive ID3 tager. Disse innstillingene kontrollerer hvordan det benyttes."
+
+#: audio_getid3.module:29
+msgid "To use this module you'll need to <a href='!download-link'>download the library</a> from the <a href='!info-link'>getID3 website</a> and extract the contents into the audio module's getid3 directory. Currently, the recommended version of the getID3 library is %recommended-version."
+msgstr "For å benytte denne modulen må du <a href='!download-link'>laste ned biblioteket</a> fra <a href='!info-link'>getID3 nettsiden</a>, hente ut innholdet og legge det inn i lydmodulens getid3 katalog. For tide er anbefalt versjon av getID3 biblioteket %recommended-version."
+
+#: audio_getid3.module:39
+msgid "getID3"
+msgstr "getID3"
+
+#: audio_getid3.module:84
+msgid "Path"
+msgstr "Sti"
+
+#: audio_getid3.module:86
+msgid "The path to the getID3 library. For example: 'modules/audio/getid3/getid3' or 'sites/default/modules/audio/getid3'"
+msgstr "Stien til getID3 biblioteket. For eksempel: 'modules/audio/getid3/getid3' eller 'sites/default/modules/audio/getid3'"
+
+#: audio_getid3.module:95
+msgid "Version"
+msgstr "Versjon"
+
+#: audio_getid3.module:97
+msgid "If you're seeing this it indicates that the getID3 library was found."
+msgstr "Dersom du kan lese dette, indikerer det at getID3 biblioteket ble funnet."
+
+#: audio_getid3.module:106
+msgid "Your getID3 library is insecure! The demos distributed with getID3 contains code which creates a huge security hole. Remove the demos directory (%path) from beneth Drupal's directory."
+msgstr "Ditt getID3 bibliotek er usikkert! Demonstrasjonsfilene som er vedlagt distribusjonen av getID3 inneholder kode som åpner et stort sikkerhetshull. Fjern demo-katalogen (%path) fra under Drupals katalog."
+
+#: audio_getid3.module:111
+msgid "Display warnings"
+msgstr "Vis advarsler"
+
+#: audio_getid3.module:113
+msgid "Check this to display the warning messages from the getID3 library when reading and writing ID3 tags. Generally it's a good idea to leave this unchecked, getID3 reports warnings for several trivial problems and the warnings can be confusing to users. This setting can be useful when debugging problems with the ID3 tags."
+msgstr "Kryss av denne for å vise advarsler fra getID3 biblioteket under lesing og skriving av ID3 tag'er. Generelt er det lurt å la denne være åpen. GetID3 rapporterer advarsler for mange relativt trivielle problemer og advarslene kan være forvirrende for brukeren. Denne innstillingen kan være hensiktsmessig når du feilsøker problemer med ID3 tag'er."
+
+#: audio_getid3.module:129
+msgid "This file information was loaded from the file by the getID3 library."
+msgstr "Denne informasjonen ble lastet fra filen ved hjelp av getID3 biblioteket."
+
+#: audio_getid3.module:144
+msgid "Format"
+msgstr "Format"
+
+#: audio_getid3.module:148
+msgid "File Size"
+msgstr "Filstørrelse"
+
+#: audio_getid3.module:149
+msgid "@filesize bytes"
+msgstr "@filesize bytes"
+
+#: audio_getid3.module:152
+msgid "Length"
+msgstr "Lengde"
+
+#: audio_getid3.module:156
+msgid "Sample rate"
+msgstr "Samplehastighet"
+
+#: audio_getid3.module:157
+msgid "@samplerate Hz"
+msgstr "@samplerate Hz"
+
+#: audio_getid3.module:160
+msgid "Channel mode"
+msgstr "Kanalmodus"
+
+#: audio_getid3.module:164
+msgid "Bitrate"
+msgstr "Bitrate"
+
+#: audio_getid3.module:165
+msgid "@bitrate bytes/second"
+msgstr "@bitrate bytes/sekund"
+
+#: audio_getid3.module:168
+msgid "Bitrate mode"
+msgstr "Bitrate modus"
+
+#: audio_getid3.module:180
+msgid "This file is not compatible with the Flash audio player. Flash can only play MP3 files with a sample rate of 11, 22 or 44KHz."
+msgstr "Denne filen er ikke kompatibel med Flash-avspilleren. Flash kan kun spille MP3 filer med en samplehastighet på 11, 22 eller 44 kHz."
+
+#: audio_getid3.module:224
+msgid "The getID3 files <em>getid3.php</em> and <em>write.php</em> could not be found in the %path directory."
+msgstr "Kan ikke finne <em>getid3.php</em> eller <em>write.php</em>  i %path folderen."
+
+#: audio_getid3.module:248
+msgid "The Audio getid3 module cannot find the getID3 library used to read and write ID3 tags. The site administrator will need to verify that it is installed and then update the <a href='!admin-settings-audio-getid3'>settings</a>."
+msgstr "audio_getID3 modulen kan ikke finne getID3 biblioteket som benyttes for å lese og skrive ID3 tager. Nettstedets administrator må verifisere at det er installert og så oppdatere <a href=\"!admin-settings-audio-getid3\">audio_getid3 innstillingene</a>."
+
+#: audio_getid3.module:356
+msgid "While reading the ID3 tags, the following warnings were encountered:"
+msgstr "Under lesing av ID3 tag'er ble følgende advarsler rapportert:"
+
+#: audio_getid3.module:362
+msgid "The following errors where encountered while reading the file's ID3 tags: "
+msgstr "Følgende feil oppsto under lesing av filens ID3 tag'er:"
+
+#: audio_getid3.module:431
+msgid "While writing the ID3 tags, the following warnings were encountered:"
+msgstr "Under skriving av ID3 tag'er ble det rapportert følgende advarsler:"
+
+#: audio_getid3.module:436
+msgid "The following errors were encountered, preventing the ID3 tags from being saved:"
+msgstr "ID3 tag'ene kan ikke skrives. Følgende feil oppsto:"
+
+#: audio_getid3.module:0
+msgid "audio_getid3"
+msgstr "audio_getid3"
+
+#: audio_getid3.info:0
+msgid "Audio getID3"
+msgstr "Lyd getID3"
+
+#: audio_getid3.info:0
+msgid "Adds the ability to read artist info from and write to audio files. Requires that the getID3 library be installed."
+msgstr "Legger til muligheten for å lese artistinformasjon fra og skrive artistinformasjon til lydfiler. Forutsetter at getID3 biblioteket er installert."
+
+#: audio_getid3.info:0
+msgid "Audio"
+msgstr "Lyd"
+

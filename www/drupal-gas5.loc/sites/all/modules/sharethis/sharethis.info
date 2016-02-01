@@ -1,0 +1,9 @@
+; $Id: sharethis.info,v 1.1.2.2.4.1 2009/03/16 19:10:20 robloach Exp $
+name = ShareThis
+description = "Implements the ShareThis system created by Alex King into posts."
+
+; Information added by drupal.org packaging script on 2009-03-26
+version = "5.x-1.x-dev"
+project = "sharethis"
+datestamp = "1238026993"
+

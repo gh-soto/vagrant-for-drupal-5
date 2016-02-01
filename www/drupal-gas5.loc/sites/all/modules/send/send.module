@@ -1,0 +1,279 @@
+<?php // $Id: send.module,v 1.33 2007/12/07 19:45:24 vauxia Exp
+
+/** 
+ * @file
+ * A "send this page" module with crm integration and a history of sent items
+ * 
+ */
+ 
+/**
+ * Implementation of hook_perm().
+ */
+function send_perm() {
+  return array('administer send', 'send nodes', 'view send statistics');
+}
+
+/**
+ * Implementation of hook_menu().
+ */
+function send_menu($may_cache) {
+  global $user;
+  $items = array();
+  if ($may_cache) {
+    $items[] = array(
+      'path'         => 'send', 
+      'title'        => t('Send'), 
+      'callback'     => '_send', 
+      'callback arguments' => array('page'), 
+      'access'       => user_access('send nodes'),
+      'type'         => MENU_SUGGESTED_ITEM,
+    );
+    $items[] = array(
+      'path'         => 'admin/content/send', 
+      'title'        => t('Send modules'), 
+      'callback'     => 'drupal_get_form', 
+      'callback arguments' => array('_send', 'module_form'), 
+      'description' => t('Default settings for "Send to Friend" and other modules that send content via e-mail'),
+      'access'       => user_access('administer send'),
+      'type'         => MENU_NORMAL_ITEM,
+    );
+    $items[] = array(
+      'path'         => 'admin/content/send/default',
+      'title'        => t('Defaults'),
+      'callback'     => 'drupal_get_form', 
+      'callback arguments' => array('_send', 'module_form'), 
+      'access'       => user_access('administer send'),
+      'type'         => MENU_DEFAULT_LOCAL_TASK,
+      'weight'       => -10,
+    );
+    foreach (send_modules() as $module => $name) {
+      $items[] = array(
+        'path'     => 'admin/content/send/'. $module, 
+        'title'    => module_invoke($module, 'send', 'name', $module),
+        'callback'     => 'drupal_get_form', 
+        'callback arguments' => array('_send', 'module_form', $module), 
+        'access'   => user_access('administer send'),
+        'type'     => MENU_LOCAL_TASK,
+      );
+    }
+  }
+  else {
+    // Hide the views-generated send statistics tab on each node page.
+    // We can't do this from views' access controls because it depends on both
+    // the user's permissions and the node's type.
+    if (arg(0) == 'node' && is_numeric(arg(1))) {
+      $path = 'node/'. arg(1) .'/send';
+
+      if (!user_access('view send statistics')) {
+        // Manually hide the statistics tab if user has no access to statistics.
+        $items[] = array('path' => $path, 'access' => false);
+      }
+      else {
+        // Manually hide the statistics tab if it's a no-op for this node type.
+        $node = node_load(arg(1));
+        $access = false;
+        foreach (send_modules() as $m => $name) {
+          if (variable_get("{$m}_{$node->type}", 0)) {
+            $access = true;
+            break;
+          }
+        }
+        if ($access == false ) {
+          $items[] = array('path' => $path, 'access' => false);
+        }
+      }
+    }
+  }
+  return $items;
+}
+/**
+ * Implementation of hook_nodeapi().
+ */
+function send_nodeapi(&$node, $op) {
+  switch ($op) {
+    case 'insert':
+    case 'update':
+      return _send('settings_submit', $op, (array)$node);
+    case 'delete':
+      return db_query("DELETE FROM {send_setting} WHERE nid = %d", $node->nid);
+  }
+}
+
+/**
+ * Implementation of hook_user().
+ */
+function send_user($op, &$edit, &$user) {
+  switch ($op) {
+    
+    case 'insert' :
+      //if user has been a recipient before, note their uid
+      if (!$user->mail) return;
+      db_query("UPDATE {send} SET uid = %d WHERE mail = '%s'", $user->uid, $user->mail);
+      db_query("UPDATE {send_recipient} SET rid = %d WHERE mail = '%s' AND rtype='user'", $user->uid, $user->mail);
+      return;
+      
+    case 'delete':
+      // no orphan uids
+      db_query("UPDATE {send} SET uid = 0 WHERE uid = %d", $user->uid);
+      db_query("UPDATE {send_recipient} SET rid = 0 WHERE rid = %d AND rtype='user'", $user->uid);
+      return;
+  }
+}
+
+/**
+ * Implementation of hook_form_alter()
+ */
+function send_form_alter($form_id, &$form) {
+  switch ($form['#id']) {
+
+    case 'node-type-form':
+      $form = _send('nodetype_form', $form);
+      return;
+      
+    case 'node-form':
+      $form = _send('node_form', $form);
+      return;
+  }
+  return;
+}
+
+/**
+ * Implementation of hook_link().
+ */
+function send_link($type, $node=null) {
+  if (!$node) return;
+  
+  foreach (send_modules() as $m => $name) {
+    if (variable_get("{$m}_{$node->type}", 0) && module_invoke($m, 'send', 'access', $m)) {
+      if (variable_get("{$m}_{$node->type}_pernode", 0)) {
+        $linktext = _send('value', 'linktext', $m, $node->type, $node);
+      }
+      else {
+        $linktext = variable_get("{$m}_{$node->type}_linktext", '');
+      }
+      if ($linktext != '<none>') {
+        $links[$m] = array(
+          'title' => t($linktext),
+          'href'  => "send/{$m}/{$node->nid}",
+          'attributes' =>  array("class" => 'send-link send-'. $m)
+        );
+      }
+    }
+  }
+  return $links;
+}
+
+/* Implementation of hooks for the views module
+ */
+function send_views_pre_query() {
+  require_once dirname(__FILE__) .'/send_views.inc';
+}
+
+function send_views_tables() {
+  require_once dirname(__FILE__) .'/send_views.inc';
+  return _send_views_tables();
+}
+
+function send_views_arguments() {
+  require_once dirname(__FILE__) .'/send_views.inc';
+  return _send_views_arguments();
+}
+
+function send_views_default_views() {
+  require_once dirname(__FILE__) .'/send_views.inc';
+  return _send_views_default_views();
+}
+
+/**
+ * Implementation of our own send hook
+ */
+function send_send($op, $module = 'send', $nodetype='', $node=null) {
+  if ($node) { 
+    $nodetype = $node->type;
+  } 
+  if ($nodetype) {
+    $nodename = node_get_types('name', $nodetype);
+  }
+  
+  switch ($op) {
+    case 'name':                 // human readable name of the module
+      return t('Send to Friend');
+      
+    case 'features':             // features that this module uses
+      return array('send', 'block');
+      
+    case 'access':               // access control for this module
+      return user_access('send nodes');
+      
+    case 'settings':             // settings form
+      return;
+      
+    case 'subject':              // default setting for subject line
+      if ($module == 'send' && $nodename) {   
+        return t('@name from '. variable_get('site_name', 'Drupal'), array('@name' => $nodename));
+      }
+      if ($name = module_invoke($module, 'send', 'name', $module)) {
+        return t('@name from '. variable_get('site_name', 'Drupal'), array('@name' => $name));
+      }
+      return;
+      
+    case 'message':              // default message text
+      return;
+      
+    case 'template':             // template/layout
+      return theme('send_template');
+      
+    case 'linktext':             // default setting for link text
+      if ($module == 'send') return t('send to friend');
+      if ($name = module_invoke($module, 'send', 'name', $module)) {
+        return strtolower(t('send @name', array('@name' => $name)));
+      }
+      return;
+      
+    case 'threshold':            // default setting for send threshold
+      return 10;
+      
+    case 'default action':       // if no nodes are included in message
+      drupal_set_message(t('You have not selected any items to send'), 'error');
+      echo theme('page', '');
+      return;
+      
+    case 'node':                 // callback that modifies appearance of each rendered node
+      return;
+      
+    case 'body':                 // callback that modifies appearance of rendered body
+      return;
+      
+    case 'querystring':          // callback that will return name=>value array for return links
+      return;
+      
+    case 'deliver':              // callback to send the message
+      return '_send_deliver';
+      
+    case 'confirm':              // callback action when complete
+      return '_send_confirm';
+
+    case 'recipient type':       // node or user 
+      return 'user';
+  }
+  return;
+}
+
+function send_modules() {
+  static $modules = array();
+  if (!$modules) {
+    foreach (module_implements('send') as $m) {
+      $modules[$m] = module_invoke($m, 'send', 'name', $m);
+    }
+  }
+  return $modules;
+}
+
+function _send($func) {
+  require_once dirname(__FILE__) .'/send.inc';
+  if (function_exists($func = '_send_'. $func)) {
+    $args = func_get_args();
+    unset($args[0]);
+    return call_user_func_array($func, $args);
+  }
+}

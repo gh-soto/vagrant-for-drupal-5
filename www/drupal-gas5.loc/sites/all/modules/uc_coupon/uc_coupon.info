@@ -1,0 +1,10 @@
+; $Id: uc_coupon.info,v 1.1 2007/09/06 22:58:18 blucches Exp $
+name = Store Coupons
+description = Allow administrators to manage store coupons
+dependencies = uc_store uc_product uc_cart
+package = Ubercart - payment
+; Information added by drupal.org packaging script on 2009-02-24
+version = "5.x-1.7"
+project = "uc_coupon"
+datestamp = "1235437850"
+

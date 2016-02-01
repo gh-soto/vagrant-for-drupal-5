@@ -1,0 +1,114 @@
+<?php
+
+/**
+ * Install the initial schema.
+ */
+function userpoints_ubercart_install() {
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+     db_query("CREATE TABLE {uc_uplog} (
+          uplog_id      INT     NOT NULL AUTO_INCREMENT,
+          uid           INT(10) NOT NULL DEFAULT '0',
+          oid						INT(10) NOT NULL DEFAULT '0',
+          points        INT(10) NOT NULL DEFAULT '0',
+				  referrer			tinyint(4) NOT NULL DEFAULT '0',
+				  discount 			decimal(10,2) NOT NULL DEFAULT '0',
+          PRIMARY KEY (uplog_id)
+        ) /*!40100 DEFAULT CHARACTER SET utf8 */;");
+     db_query("CREATE TABLE {uc_updiscounts} (
+          updlog_id		INT     NOT NULL AUTO_INCREMENT,
+          uid			INT(10) NOT NULL DEFAULT '0',
+          oid			INT(10) NOT NULL DEFAULT '0',
+          ptamt			DECIMAL(10,2) NOT NULL DEFAULT '0',
+          PRIMARY KEY (updlog_id)
+        ) /*!40100 DEFAULT CHARACTER SET utf8 */;");
+      break;
+    case 'pgsql':
+			db_query("CREATE TABLE {uc_uplog} (
+					 uplog_id   serial,
+					 uid   INT NOT NULL DEFAULT '0',
+					 oid   INT NOT NULL DEFAULT '0',
+					 points   INT NOT NULL DEFAULT '0',
+					 referrer   SMALLINT NOT NULL DEFAULT '0',
+					 discount   INT NOT NULL DEFAULT '0',
+					 PRIMARY KEY (uplog_id)
+					 )");
+			db_query("CREATE TABLE {uc_updiscounts} (
+					 updlog_id   serial,
+					 uid   INT NOT NULL DEFAULT '0',
+					 oid   INT NOT NULL DEFAULT '0',
+					 ptamt   DECIMAL(10,2) NOT NULL DEFAULT '0',
+					 PRIMARY KEY (updlog_id)
+				 erpoints_ubercart.install");
+			 break;
+  }
+}
+
+/**
+* Implementation of hook_uninstall().
+*/
+function userpoints_ubercart_uninstall() {
+  db_query('DROP TABLE {uc_uplog}');
+  db_query('DROP TABLE {uc_updiscounts}');
+}
+
+
+function userpoints_ubercart_update_1() {
+  $ret = array();
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+      // Add the discount column
+      $ret[] = update_sql("ALTER TABLE {uc_uplog} ADD discount decimal(10,2) NOT NULL DEFAULT '0' AFTER referrer");
+      break;
+  }
+  return $ret;
+}
+
+function userpoints_ubercart_update_2() {
+  $ret = array();
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+     db_query("CREATE TABLE {uc_updiscounts} (
+          updlog_id		INT     NOT NULL AUTO_INCREMENT,
+          uid			INT(10) NOT NULL DEFAULT '0',
+          oid			INT(10) NOT NULL DEFAULT '0',
+          ptamt			DECIMAL(10,2) NOT NULL DEFAULT '0',
+          PRIMARY KEY (updlog_id)
+        ) /*!40100 DEFAULT CHARACTER SET utf8 */;");
+      break;
+  }
+  return $ret;
+}
+
+function userpoints_ubercart_update_3() {
+  $ret = array();
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+     db_query("alter TABLE {uc_uplog} change ptamt ptamt DECIMAL(10,2)
+      );");
+      break;
+    case 'pgsql':
+			db_query("CREATE TABLE {uc_uplog} (
+					 uplog_id   serial,
+					 uid   INT NOT NULL DEFAULT '0',
+					 oid   INT NOT NULL DEFAULT '0',
+					 points   INT NOT NULL DEFAULT '0',
+					 referrer   SMALLINT NOT NULL DEFAULT '0',
+					 discount   INT NOT NULL DEFAULT '0',
+					 PRIMARY KEY (uplog_id)
+					 )");
+			db_query("CREATE TABLE {uc_updiscounts} (
+					 updlog_id   serial,
+					 uid   INT NOT NULL DEFAULT '0',
+					 oid   INT NOT NULL DEFAULT '0',
+					 ptamt   DECIMAL(10,2) NOT NULL DEFAULT '0',
+					 PRIMARY KEY (updlog_id)
+				 erpoints_ubercart.install");
+			 break;
+  }
+  return $ret;
+}

@@ -1,0 +1,13 @@
+/* $Id: service_links.css,v 1.1 2008/07/23 23:37:04 greenskin Exp $ */
+
+div.share-service-links ul {
+  margin: 0px;
+  padding: 0px;
+}
+div.share-service-links ul li {
+  width: 50%;
+  display: block;
+  margin: 0px;
+  padding: 0px;
+  float: left;
+}

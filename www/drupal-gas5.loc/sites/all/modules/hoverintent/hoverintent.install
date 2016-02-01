@@ -1,0 +1,7 @@
+<?php
+// $Id: hoverintent.install,v 1.1 2008/01/24 18:54:40 aaron Exp $
+
+function hoverintent_install() {
+  include_once('./'. drupal_get_path('module', 'jq') .'/jq.module');
+  jq_plugins(NULL, FALSE, TRUE);
+}

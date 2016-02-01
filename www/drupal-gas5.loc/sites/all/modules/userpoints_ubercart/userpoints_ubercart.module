@@ -1,0 +1,99 @@
+<?php
+
+//$Id: userpoints_ubercart.module,v 1.1 2007/12/30 22:06:48 bmagistro Exp $
+
+require_once('uc_points_payment.inc');
+require_once('uc_points_discount.inc');
+
+define('USERPOINTS_UC_EARN',      'userpoints_ubercart_earn');
+define('USERPOINTS_MIN_PURCHASE', 'userpoints_min_purchase');
+define('USERPOINTS_UC_PAYMENT',   'userpoints_ubercart_payment');
+define('USERPOINTS_UC_SPEND',     'userpoints_ubercart_spend');
+define('USERPOINTS_MIN_SPEND',    'userpoints_min_spend');
+define('USERPOINTS_DISCOUNT',     'userpoints_discount');
+define('USERPOINTS_AWARD_TO',     'userpoints_award_to');
+define('USERPOINTS_REF_MULT',     'userpoints_ref_mult');
+
+function userpoints_ubercart_help($section) {
+  switch ($section) {
+    case 'admin/modules#description':
+      $output = t('<strong>UC UP:</strong> Interfaces userpoints with Ubercart, so users can get points for purchases, pay with points and use points as a discount.');
+      break;
+  }
+  return $output;
+}
+
+function userpoints_ubercart_userpoints($op, $points = 0, $uid = 0, $event = '') {
+  switch($op) {
+    case 'setting':
+      if (module_exists('uc_cart') && module_exists('uc_payment')) {
+        $group = 'ubercart';
+        $form[$group] = array(
+          '#type' => 'fieldset',
+          '#collapsible' => TRUE,
+          '#collapsed' => TRUE,
+          '#title' => t('Ubercart Options'),
+        );
+    
+        $form[$group][USERPOINTS_UC_EARN] = array(
+          '#type' => 'textfield',
+          '#title' => t('!Points awarded for buying (multiplied by price)', userpoints_translation()),
+          '#default_value' => variable_get(USERPOINTS_UC_EARN, 0),
+          '#size' => 5,
+          '#maxlength' => 5,
+        );
+    
+        $form[$group][USERPOINTS_MIN_PURCHASE] = array(
+          '#type' => 'textfield',
+          '#title' => t('Smallest purchase for which !points are awarded', userpoints_translation()),
+          '#default_value' => variable_get(USERPOINTS_MIN_PURCHASE, '0.00'),
+          '#size' => 5,
+          '#maxlength' => 5,
+        );
+    
+    
+        $form[$group][USERPOINTS_UC_SPEND] = array(
+          '#type' => 'textfield',
+          '#title' => t('!Points used in payment (for every dollar)', userpoints_translation()),
+          '#default_value' => variable_get(USERPOINTS_UC_SPEND, 1),
+          '#size' => 5,
+          '#maxlength' => 5,
+        );
+        
+        $form[$group][USERPOINTS_DISCOUNT] = array(
+          '#type' => 'radios',
+          '#title' => t('Enable !Points as a discount method', userpoints_translation()),
+          '#default_value' =>  variable_get(USERPOINTS_DISCOUNT,0),
+          '#options' => array(t('No'), t('Yes')),
+        );
+
+/*
+        $form[$group][USERPOINTS_MIN_SPEND] = array(
+          '#type' => 'textfield',
+          '#title' => t('Number of !points that must be spent per purchase', userpoints_translation()),
+          '#default_value' => variable_get(USERPOINTS_MIN_SPEND, 0),
+          '#size' => 5,
+          '#maxlength' => 5,
+        );
+*/
+        if(module_exists('referral')) {
+          $form[$group][USERPOINTS_AWARD_TO] = array(
+            '#type' => 'radios',
+            '#title' => t('User to whom !points are awarded on purchase', userpoints_translation()),
+            '#default_value' =>  variable_get(USERPOINTS_AWARD_TO,0),
+            '#options' => array(t('Referrer only'), t('Purchaser only'), t('Referrer and Purchaser')),
+          );
+          $form[$group][USERPOINTS_REF_MULT] = array(
+            '#type' => 'textfield',
+            '#title' => t('!points multiplier for referrer', userpoints_translation()),
+            '#default_value' =>  variable_get(USERPOINTS_REF_MULT,1),
+            '#size' => 5,
+            '#maxlength' => 5,
+            '#description' => t('Add a multiplier here if you wish to have your referrer and purchaser get different point values based on their role.  If for instance you want your referrer to get 50% of the points awarded to the purchaser, enter 0.5 here.  The default value, 1, awards equal points.  <b>This field is only valid when "Referrer and Purchaser" is selected above.  Otherwise the standard multiplier is used.</b>'),
+          );
+        }
+      }
+      return $form;
+      break;
+  }
+}

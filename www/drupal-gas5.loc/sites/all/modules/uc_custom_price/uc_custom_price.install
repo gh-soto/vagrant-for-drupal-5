@@ -1,0 +1,19 @@
+<?php
+// $Id: uc_custom_price.install,v 1.1.4.1 2008/12/11 19:33:28 cyu Exp $
+
+function uc_custom_price_install() {
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+      db_query("CREATE TABLE {uc_custom_price} (
+        nid INT(10) NOT NULL,
+        custom_code TEXT NOT NULL,
+        PRIMARY KEY (nid)
+      ) /*!40100 DEFAULT CHARACTER SET UTF8 */ ");
+      break;
+  }
+}
+
+function uc_custom_price_uninstall() {
+  db_query("DROP TABLE IF EXISTS {uc_custom_price}");
+}

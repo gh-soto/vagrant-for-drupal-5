@@ -1,0 +1,312 @@
+/*
+ Friendselectric Modified Template
+ by Daniel Hunt for the UIEForum module.
+ Updated by zQlab.com for Green and Save. 
+ This theme is licensed under the GPL.
+*/
+
+/*
+ * UIEForum Specific CSS
+ */
+
+/* Make the drupal forum containers look like phpBB */
+table.forum
+{
+	width:100%;
+	margin: 0em;
+}
+
+table.forum td.container
+{
+	background-color: white;
+	font-size: .9em;
+	font-weight: bold;
+	font-family: verdana;
+	padding-top: 5px;
+}
+
+table.forum td.forum, table.forum tr.dark, table.forum tr.light, table.forum td.topic, td.forum-middle-left, td.forum-middle-right, td.forum-bottom-left, td.forum-bottom-right
+{
+  background-color: #FBFBFB;
+}
+table.forum td.forum:hover, table.forum td.numposts, table.forum td.post_user_info, table.forum td.numtopics, table.forum td.uieforum-last-reply, table.forum td.topic:hover, table.forum td.replies, table.forum td.created, table.forum th.created, table.forum td.forum_pagenums, td.forum-header-left, td.forum-header-right, table.forum td.uieforumicon
+{
+  background-color: #E0EBDD;
+}
+table.forum td.postHeader, table.forum td.postFooter
+{
+	font-weight: bold;
+}
+div.quote, div.uie_pre, code.uie_pre
+{
+  background-color: #E0EBDD;
+}
+
+table.forum td.forum
+{
+	border: solid white 1px;
+	height: 50px;
+}
+
+
+
+table.forum td.forum:hover {border:solid white 1px;height:50px; }
+table.forum .description {font-size:.8em;}
+table.forum tr.dark {border:solid white 1px;height:10px; }
+table.forum tr.light {border:solid white 0px;height:10px;}
+table.forum td.dark, td.light, a:hover {color:red;}
+table.forum td.post_user_info{border:solid white 1px; text-align: left; vertical-align: top; width: 150px; font-weight: bold; }
+table.forum td.uieforumicon, table.forum td.numposts, table.forum td.numtopics{ border:solid white 1px; text-align: center; width: 10px; } /* width is set to a low amount just to make sure it stays as small as possible. */
+table.forum td.uieforumicon{padding:10px;}
+table.forum td.uieforum_nopadding{padding:0px;}
+/* After you click a forum container link, this page shows a list of topics inside the forum*/
+table.forum td.topic, table.forum td.post_text {border:solid white 1px; padding:10px; text-align: left; }
+table.forum td.topic {width:600px;}
+table.forum td.topic:hover {width:600px;border:solid white 1px; padding: 10px;}
+table.forum td.replies {border:solid white 1px;}
+table.forum td.uieforum-last-reply { width: 130px }
+table.forum td.uieforum-last-reply, table.forum td.created, table.forum th.created, table.forum td.forum_pagenums{border:solid white 1px; text-align: left; vertical-align: middle; }
+table.forum td.forum_pagenums, table.forum td.forum_pagenums div.form-item select { text-align: right; font-size: 80%; }
+table.forum td.forum_pagenums div.form-item select {text-align: left; }
+/*table.forum td.post_text { background-color:#FFFFFF; vertical-align: text-top; position: relative; }*/
+table.forum td.post_text { background-color:#FFFFFF; vertical-align: text-top; }
+table.forum td.post_text a:link, table.forum td.post_text a:visited, table.forum td.post_text a:hover { font-weight: bold; }
+
+/* Customize an actual forum post, which is output in node-forum.tpl.php*/
+td.forum-header-left{border:solid white 1px;padding:10px;}
+td.forum-header-right{border:solid white 1px;padding:10px;}
+td.forum-middle-left{border:solid white 1px; padding:10px; }
+td.forum-middle-right{border:solid white 1px;  height:200px; width:600px; vertical-align:top;}
+td.forum-bottom-left{border:solid white 1px;border-bottom:solid white 15px; }
+td.forum-bottom-right{border:solid white 1px;border-bottom:solid white 15px; padding:5px; text-align:right;}
+
+div.post-container
+{
+  margin: .5em;
+  border: 2px solid #fff; /* blue #73A365 border */
+}
+
+div.quote
+{
+  padding: .5em;
+  margin: .5em;
+  border: 2px solid #bcc5ca;
+}
+
+div.rant
+{
+  padding: .5em;
+  margin: .5em;
+  background-color: #FF7D7D;
+  border: 2px solid #dd0000;
+}
+
+div.uie_pre, code.uie_pre
+{
+  padding: 1px;
+  margin: .5em;
+  border: 1px solid #8cacbb;
+
+  overflow: auto;
+/*  overflow-y: hidden;*/
+  min-height: 3em;
+  max-height: 40em;
+  color: black;
+/*  font-family: Courier New;*/
+}
+
+div.post-interaction
+{
+  text-align: right;
+  background-color: #ffffff;
+  border: 1px dashed #bcc5ca;
+  width: 80px;
+  text-align: center;
+}
+
+ul.uieforum_ul {
+  padding: 3px;
+}
+
+.item-list ul.uieforum_ul li, li.uieforum_expanded, li.uieforum_collapsed, li.uieforum_leaf
+{
+  background: none;
+  list-style-type: none;
+  list-style-image: none;
+  margin: 0;
+  padding: 0px 0px 5px 0px;
+}
+
+li.uieforum_leaf img
+{
+  padding-left: 3px;
+  vertical-align: middle;
+}
+
+.item-list li.uieforum_expanded a, li.uieforum_collapsed a, li.uieforum_leaf a {
+  margin: 0;
+  padding: 3px 3px 3px 3px;
+  display: block;
+  text-decoration: none;
+}
+
+.item-list ul.uieforum_ul li.uieforum_li a:hover, li.uieforum_expanded a:hover, li.uieforum_collapsed a:hover, li.uieforum_leaf a:hover {
+  background-color: #fafafa; 
+  padding: 2px 2px 2px 2px;
+  border: 1px solid #ccc;
+  background-position: 3px 4px;
+}
+
+div.uie_edit_text
+{
+  text-decoration: none;
+  font: 11px verdana;
+  color: grey;
+}
+
+
+div.signature
+{
+  width: 95%;
+  font-size: 80%;
+/*
+  background-color: red;
+  border-style: solid;
+  border-color: #dd0000;
+  bottom: 0px;
+  position: relative;
+*/
+}
+
+div.uieforum_postsubject
+{
+  font-weight: bold;
+  display: block;
+}
+
+div.uieforum_postcontent
+{
+}
+
+span.block-forum-title, span.block-forum-title a, span.block-forum-title a:hover, span.block-forum-title a:visited
+{
+  font-weight:bold;
+  font-style:italic;
+}
+
+.uieheader
+{
+  font-weight: bold;
+}
+
+table.userbar {
+  line-height:1em;
+}
+
+table.userbar .navigation {
+  padding:2px;
+  width:70%;
+  padding-left:1em;
+  background-color:#F7F9FF;
+  border:1px solid #fff;
+}
+
+table.userbar .navigation .trail {
+  font-size: 80%;
+}
+
+table.userbar .navigation .current {
+  font-weight:bold;
+  padding-left:20px;
+  line-height:2em;
+}
+
+table.userbar .welcome {
+  background-color:#E0EBDD;
+  padding-left:1em;
+  font-size: 80%;
+  border:1px solid #fff;
+}
+
+table.userbar .welcome .welcomeText {
+  font-weight: bold;
+}
+
+#edit-PostText {
+	width: 100%;
+	height: 250px;
+}
+
+#edit-PostTitle, #edit-EditReason {
+	width: 400px;
+}
+
+.uieforum_block_poster_info {
+	text-align: right;
+	width: 100%
+}
+
+.uieforum_block_poster_info a {
+	font-size: 10px;
+}
+
+table.forum tr td.uieicon-Landscaping{
+background:#E0EBDD url('/sites/all/modules/uieforum/uie/green_green_32.gif') top left no-repeat;
+width:60px;
+height:30px;
+}
+table.forum tr td.uieicon-Remodeling{
+background:#E0EBDD url('/sites/all/modules/uieforum/uie/remodeling.gif') top left no-repeat;
+width:60px;
+height:30px;
+}
+table.forum tr td.uieicon-Appliances{
+background:#E0EBDD url('/sites/all/modules/uieforum/uie/appliances.gif') top left no-repeat;
+width:60px;
+height:30px;
+}
+table.forum tr td.uieicon-Cooling{
+background:#E0EBDD url('/sites/all/modules/uieforum/uie/cool.gif') top left no-repeat;
+width:60px;
+height:30px;
+}
+table.forum tr td.uieicon-Heating{
+background:#E0EBDD url('/sites/all/modules/uieforum/uie/heat.gif') top left no-repeat;
+width:60px;
+height:30px;
+}
+table.forum tr td.uieicon-Lifestyle{
+background:#E0EBDD url('/sites/all/modules/uieforum/uie/life.gif') top left no-repeat;
+width:60px;
+height:30px;
+}
+table.forum tr td.uieicon-EnergySavings{
+background:#E0EBDD url('/sites/all/modules/uieforum/uie/energy.gif') top left no-repeat;
+width:60px;
+height:30px;
+}
+table.forum tr td.uieicon-Finishes{
+background:#E0EBDD url('/sites/all/modules/uieforum/uie/finish.gif') top left no-repeat;
+width:60px;
+height:30px;
+}
+
+table.forum tr td.uieicon-Landscaping IMG,
+table.forum tr td.uieicon-Remodeling IMG,
+table.forum tr td.uieicon-Appliances IMG,
+table.forum tr td.uieicon-Cooling IMG,
+table.forum tr td.uieicon-Heating IMG,
+table.forum tr td.uieicon-Lifestyle IMG,
+table.forum tr td.uieicon-EnergySavings IMG,
+table.forum tr td.uieicon-Finishes IMG{
+display:none;
+visibility:hidden;
+}
+
+table.forum IMG.bb-image{
+/* resize URL based images in forum to max width
+	css2.0 compliant & works in ie6... */
+max-width:480px;
+width:480px;
+display:block;
+}

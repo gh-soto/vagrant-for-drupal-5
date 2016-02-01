@@ -1,0 +1,179 @@
+/*  zqlab.com
+	 horizontal drop down menu 101
+	*/
+
+/* Replace #navigation with what you named the Block in Drupal */
+
+/* Height of the block
+	Put background image here */
+#navigation .content{
+height:28px;
+width:990px;
+}
+/* Do not display Block title */
+#navigation h2{
+display:none;
+visibility:hidden;
+}
+/* Vertical positioning of the top level menu within the Block body */
+#navigation ul.menu {
+  margin: 0;
+  border: 0 none;
+  padding: 0;
+  width: 98%; /*For KHTML*/
+  width:990px;
+  list-style: none;
+  height: 20px;
+  padding-top:0px;
+}
+/* Dimensions for the top level menu items */
+#navigation ul.menu li {
+  margin: 0;
+  border: 0 none;
+  padding: 0px; /* 10 px space left and right side of menu items */
+  float: left; /*For Gecko*/
+  display: inline;
+  list-style: none;
+  position: relative;
+  height: auto;
+  width:auto;
+	text-align:left;
+  border-right:1px solid #121212;
+    z-index:10;
+
+}
+/* Dimensions of the first dropdown menu item
+	and where its vertical positioning is.  */
+#navigation ul.menu ul {
+  margin: 0;
+  border: 0 none;
+  padding: 0;
+  width: 122px;
+  list-style: none;
+  display: none;		/* Hide state */
+  position: absolute;
+  background:none;
+  top: 28px;
+	left: 0;
+  z-index:10;
+
+}
+#navigation ul.menu ul:after /*From IE 7 lack of compliance*/{
+  clear: both;
+  display: block;
+  font: 1px/0px serif;
+  content: ".";
+  height: 0;
+  visibility: hidden;
+}
+#navigation ul.menu ul li {
+  width: 170px;
+  float: left; /*For IE 7 lack of compliance*/
+  display: block !important;
+  display: inline; /*For IE*/
+  z-index:20;
+
+}
+/* Menu Styling
+	top level menu */
+#navigation ul.menu a {
+  padding: 7px 10px;
+  float: none !important; /*For Opera*/
+  float: left; /*For IE*/
+  display: block;
+  background:none;
+  color: #fff;
+  font: 12px Verdana, Helvetica, sans-serif;
+  text-decoration: none;
+  height: auto !important;
+  height: 1%; /*For IE*/
+  text-align:center;
+}
+/* Menu Styling
+	Hovering state of the top level menu */
+#navigation ul.menu a:hover,
+#navigation ul.menu li:hover a,
+#navigation ul.menu li.iehover a,
+#navigation ul.menu li.active,
+#navigation ul.menu li.active a{
+ background-color:#CAD0D0;
+  color: #000;
+}
+/* Menu Styling
+	First drop down menu  */
+#navigation ul.menu li:hover li a,
+#navigation ul.menu li.iehover li a {
+  float: none;
+  background: #EEF0F0;
+  color: #000;
+  border-bottom:#fff solid 1px;  /* medium grey */
+  border-left:#fff solid 1px;
+  border-right:#fff solid 1px;
+  font-variant:normal;
+  font: 12px/22px Arial, Helvetica, sans-serif;
+  text-align:left;
+  padding:2px 4px;
+
+  }
+/* Menu Styling
+	First drop down menu Footer image
+	This adds space at the bottom of the menu for an image */
+#navigation ul.menu li.expanded ul.menu{
+background:none;
+height:auto;
+}
+/* Menu Styling
+	Second drop down menu hovering state */
+#navigation ul.menu li:hover li a:hover,
+#navigation ul.menu li:hover li:hover a,
+#navigation ul.menu li.iehover li a:hover,
+#navigation ul.menu li.iehover li.iehover a {
+  float: none;
+  background-color: #CAD0D0;
+  color: #000;
+  font-variant:normal;
+  text-decoration:none;
+  font: 12px/22px Arial, Helvetica, sans-serif;
+}
+/* Menu Styling
+	Third drop down menu */
+#navigation ul.menu li:hover li:hover li a,
+#navigation ul.menu li.iehover li.iehover li a {
+  background-color:#EEF0F0;		
+  color: #000;	  	
+  text-align:left;
+  margin-left:5px;
+}
+
+/* Menu Styling
+	Third drop down menu hovering state */
+#navigation ul.menu li:hover li:hover li a:hover,
+#navigation ul.menu li:hover li:hover li:hover a,
+#navigation ul.menu li.iehover li.iehover li a:hover,
+#navigation ul.menu li.iehover li.iehover li.iehover a {
+  background-color:#CAD0D0;		/* light  grey */
+  color: #000;			/* white text */
+  z-index:10;
+}
+#navigation ul.menu ul ul,
+#navigation ul.menu ul ul ul {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 165px;
+}
+/* Do Not Move - Must Come Before display:block for Gecko */
+#navigation ul.menu li:hover ul ul,
+#navigation ul.menu li:hover ul ul ul,
+#navigation ul.menu li.iehover ul ul,
+#navigation ul.menu li.iehover ul ul ul {
+  display: none;
+}
+#navigation ul.menu li:hover ul,
+#navigation ul.menu ul li:hover ul,
+#navigation ul.menu ul ul li:hover ul,
+#navigation ul.menu li.iehover ul,
+#navigation ul.menu ul li.iehover ul,
+#navigation ul.menu ul ul li.iehover ul {
+  display: block;
+}

@@ -1,0 +1,9 @@
+name = "Relevant Content"
+package = "Taxonomy"
+dependencies = taxonomy
+description = "Provides blocks displaying relevant nodes for the current page based on taxonomy."
+; Information added by drupal.org packaging script on 2007-11-02
+version = "5.x-1.x-dev"
+project = "relevant_content"
+datestamp = "1193962049"
+

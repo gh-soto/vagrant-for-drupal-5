@@ -1,0 +1,10 @@
+; $Id $
+name = "Auto Assign Role"
+description = "Designate a role to assign all new users to."
+
+
+; Information added by drupal.org packaging script on 2008-02-12
+version = "5.x-1.1"
+project = "autoassignrole"
+datestamp = "1202837702"
+

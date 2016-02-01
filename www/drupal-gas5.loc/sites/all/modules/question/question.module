@@ -1,0 +1,542 @@
+<?php
+// $Id: question.module,v 1.7.4.9 2007/10/20 00:25:30 codepoet Exp $
+
+/**
+ * Implementation of hook_help().
+ *
+ */
+ 
+function question_help($section) {
+  switch ($section) {
+    case 'node/add#question':
+      // This description shows up when users click "create content."
+      return t('A question/answer node.');
+    case 'admin/question':
+      return t('Here is a list of the questions that have been submitted to your site. Each question can be answered by selecting "promote". Once submitted, this question becomes a node. Choose "delete" to delete this question without answering.');
+  }
+}
+
+/**
+ * Implementation of hook_node_info().
+ *
+ */
+function question_node_info() {
+  return array('question' => array(
+  	'name' => t('question'),
+  	'module' => 'question',
+  	'description' => 'Users can ask questions and administrators can respond.'));
+}
+
+/**
+ * Implementation of hook_access().
+ *
+ */
+function question_access($op, $node) {
+  if ($op == 'create') {
+    return user_access('manage questions');
+  }
+}
+
+/**
+ * Implementation of hook_perm().
+ *
+ */
+function question_perm() {
+  return array('manage questions');
+}
+
+
+/**
+ * Implementation of hook_menu().
+ *
+ */
+function question_menu($may_cache) {
+  $items = array();
+
+  if ($may_cache) {
+    $items[] = array(
+	  'path' => 'node/add/question',
+	  'title' => t('question'),
+      'access' => user_access('manage questions'));
+    $items[] = array(
+	  'path' => 'admin/content/question',
+	  'title' => t('Question'),
+	  'description' => t('Manage the site\'s question queue.'),
+      'access' => user_access('manage questions'),
+      'callback'=>'question_list_page');
+    $items[] = array(
+	  'path' => 'question',
+	  'title' => t('ask a question'),
+      'access' => TRUE,
+      'callback'=>'question_add');
+    $items[] = array(
+      'path' => 'admin/settings/question',
+      'title' => t('Question'),
+      'description' => t('Edit Question settings.'),
+      'callback' => 'drupal_get_form',
+      'callback arguments' => 'question_settings',
+      'access' => user_access('administer site configuration'),
+      'type' => MENU_NORMAL_ITEM );
+  }
+
+  return $items;
+}
+
+/**
+ * Implementation of hook_form().
+ *
+ */
+function question_form(&$node) {
+
+  if (arg(2)=='question' && is_numeric(arg(3))) {
+    $que = db_fetch_object(db_query('SELECT * FROM {question_queue} WHERE qid = %d', arg(3)));
+    $node->questioner = $que->questioner;
+    $node->question = $que->question;
+    $form['qid'] = array(
+      '#type' => 'hidden',
+      '#value' => arg(3),
+    );
+  }
+
+  $form['title'] = array('#type' => 'textfield',
+    '#title' => t('Subject'),
+    '#default_value' => $node->title,
+    '#size' => 60,
+    '#maxlength' => 128,
+    '#weight' => -8,
+    '#required' => TRUE);
+
+  $form['questioner'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Questioner'),
+    '#default_value' => $node->questioner,
+    '#size' => 60,
+    '#maxlength' => 128,
+    '#weight' => -7,
+    '#description' => t("The person asking the question. Can be the user's id (uid), username, or an email address."),
+  );
+
+  // Now we define the form elements specific to our node type.
+  $form['question'] = array('#weight' => -6);
+  $form['question']['question'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Question'),
+    '#default_value' => $node->question,
+    '#cols' => 60,
+    '#rows' => 20
+  );
+  $form['question']['q_format'] = filter_form($node->q_format, 10, array('q_format'));
+
+  $form['answer'] = array('#weight' => -5);
+  $form['answer']['answer'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Answer'),
+    '#default_value' => $node->answer,
+    '#cols' => 60,
+    '#rows' => 20
+  );
+  $form['answer']['a_format'] = filter_form($node->a_format, 10, array('a_format'));
+
+  return $form;
+}
+
+/**
+ * Implementation of hook_validate().
+ *
+ */
+function question_validate(&$node) {
+  
+  $node->body = '';
+  
+  // make body for node previews and whatnot
+  //$node->body = '<em>'.$node->question."</em><br />\n
+  //".$node->answer;
+  //$node->format = $node->a_format;
+  
+  //check validity of questioner
+  $req = (variable_get('question_require_registered', FALSE));
+  if (is_numeric($node->questioner)) {
+    // is it a uid?
+    if (!$account = user_load(array('uid'=>$node->questioner))) {
+      // it is not a uid
+      if ($req) {
+        form_set_error('questioner', t('This is not a valid user id.'));
+      }
+    }
+    else {
+      // it is a uid
+      $node->quid = $account->uid;
+      $node->questioner = $account->name;
+    }
+  }
+  else {
+    if (valid_email_address($node->questioner)) {
+      // it's an email address
+      if ($account = user_load(array('mail'=>$node->questioner))) {
+        // they're "one of us"
+        $node->quid = $account->uid;
+        $node->questioner = $account->name;
+      }
+    }
+    elseif ($account = user_load(array('name'=>$node->questioner))) {
+      // it's a user
+      $node->quid = $account->uid;
+    }
+    else {
+      // it's neither an email nor a user
+    if ($req) {
+      form_set_error('questioner', t('This is neither an email address nor a valid user name.'));        
+      }
+    }
+  }
+}
+
+
+function question_settings() {
+  // require users to be registered in order to ask questions?
+  $form['question_require_registered'] = array(
+  '#type' => 'checkbox',
+  '#weight' => -5,
+  '#title' => t('Require registered users?'),
+  '#return_value' => 1,
+  '#default_value' => variable_get('question_require_registered', FALSE),
+  '#description' => t('Require users to be authenticated in order to submit questions?'),
+);
+
+  // Thank You node
+  $form['question_thanks'] = array(
+    '#type' => 'textfield',
+    '#weight' => -3,
+    '#title' => t('Path to "Thank You" node'),
+    '#default_value' => variable_get('question_thanks', FALSE),
+    '#size' => 40,
+    '#maxlength' => 100,
+    '#description' => t('This is where users will end up after they submit the question form. Example: "node/454".<br/>Leave blank and user will be returned to the form page with a thank you message.'),
+  );
+
+  // Instructions
+  $form['question_instructions'] = array(
+    '#type' => 'textarea',
+    '#weight' => -1,
+    '#title' => t('Instructions for the user'),
+    '#default_value' => variable_get('question_instructions', FALSE),
+    '#size' => 40,
+    '#description' => t('This message will appear above the question form to provide the user instructions.'),
+  );
+  
+  $form['question_instructions_format'] = filter_form(variable_get('question_instructions_format', false), 0, array('question_instructions_format'));
+  
+  return system_settings_form($form);
+}
+
+
+function question_list_page($op = NULL, $qid = NULL) {
+  if ($_POST['edit']['confirm']) {
+    question_queue_item_delete($_POST['edit']['qid']);
+    unset($_POST);
+    drupal_goto('admin/content/question');
+  }
+  switch ($op) {
+    case 'delete':
+      return drupal_get_form('question_queue_item_delete');
+      break;      
+    default:
+      $headers = array(t('Question'), t('Operations'));
+      $sql = 'SELECT * FROM {question_queue} ORDER BY qid DESC';
+      $result = pager_query($sql);
+      while ($r = db_fetch_object($result)) {
+        $rows[$r->qid]['question']['data'] = '<i>'.$r->questioner.'</i><br/>'.check_markup($r->question);
+        $rows[$r->qid]['question']['style'] = 'vertical-align:top;border-bottom:solid 1px #666;';
+        $rows[$r->qid]['operations']['data'] = l(t('delete'), 'admin/content/question/delete/'.$r->qid).'&nbsp;'.l(t('promote'), 'node/add/question/'.$r->qid, array('title'=>t('create a question node based on this submission')));
+        $rows[$r->qid]['operations']['style'] = 'vertical-align:top;border-bottom:solid 1px #666;';
+      }
+      $output = theme('table', $headers, $rows, array('style'=>'width:100%', 'cellpadding'=>'5'));
+      $output .= theme('pager');
+  }
+  return $output;
+}
+
+function question_queue_item_delete() {
+  $qid = arg(4);
+  $queue_item = db_fetch_object(db_query("SELECT * from {question_queue} WHERE qid = %d", $qid));
+  
+  $form['qid'] = array(
+    '#type' => 'hidden',
+    '#value' => $qid
+  ); 
+  return confirm_form($form, t('Are you sure you want to delete this question?'), 'admin/content/question', $queue_item->question, t('Delete'), t('Cancel'), 'question_queue_item_delete');
+}
+
+function question_queue_item_delete_submit($form_id, $form_values) {
+  db_query('DELETE FROM {question_queue} WHERE qid="%d"', $form_values['qid']);
+  drupal_set_message(t('Item deleted'));
+  drupal_goto('admin/content/question');
+}
+
+/**
+ * Implementation of hook_insert().
+ *
+ */
+function question_insert($node) {
+  db_query("INSERT INTO {question_node} (nid, questioner, quid, question, q_format, answer, a_format) VALUES (%d, '%s', %d, '%s', %d, '%s', %d)", $node->nid, $node->questioner, $node->quid, $node->question, $node->q_format, $node->answer, $node->a_format);
+  // if this node came from the queue, delete the queue item...
+  if (isset($node->qid)) {
+    db_query("DELETE FROM {question_queue} WHERE qid = %d", $node->qid);
+  }
+}
+
+/**
+ * Implementation of hook_update().
+ *
+ */
+function question_update($node) {
+  db_query("UPDATE {question_node} SET questioner='%s', quid=%d, question='%s', q_format=%d, answer='%s', a_format=%d WHERE nid = %d", $node->questioner, $node->quid, $node->question, $node->q_format, $node->answer, $node->a_format,  $node->nid);
+}
+
+/**
+ * Implementation of hook_delete().
+ *
+ */
+function question_delete($node) {
+  db_query('DELETE FROM {question_node} WHERE nid = %d', $node->nid);
+}
+
+/**
+ * Implementation of hook_load().
+ *
+ */
+function question_load($node) {
+  $additions = db_fetch_object(db_query('SELECT questioner, quid, question, q_format, answer, a_format FROM {question_node} WHERE nid = %d', $node->nid));
+  return $additions;
+}
+
+/**
+ * Implementation of hook_view().
+ *
+ */
+function question_view($node, $teaser = FALSE, $page = FALSE) {
+  $node = node_prepare($node, $teaser);
+  if ($teaser) {
+	  $node->content['teaser']['#value']	= theme('question_teaser', $node);
+  } else {
+	  $node->content['body']['#value']		= theme('question_body', $node);
+  }
+  return $node;
+}
+
+function theme_question_body($node) {
+  if ($node->quid) {
+    $node->questioner = l($node->questioner, 'user/'.$node->quid);
+  }
+  $output = '<div class="question">';
+  if ($node->questioner) {
+    $output .= '<div class="question-asks">'.$node->questioner.t(" asks:")."</div>";
+  }
+  $output .= '<div class="question-question">'.t('<h3>Question</h3>').check_markup($node->question, $node->q_format, FALSE).'</div>';
+  $output .= '<div class="question-answer">'.t('<h3>Answer</h3>').check_markup($node->answer, $node->a_format, FALSE).'</div>';
+  $output .= '</div>';
+  return $output;
+}
+
+function theme_question_teaser($node) {
+  // just the question for the teasers...
+  $output = '<div class="question">';
+  $output .= '<div class="question-question">'.check_markup($node->question, $node->q_format, FALSE).'</div>';
+  $output .= '</div>';
+  $output .= l(t('Read the answer...'),'node/'.$node->nid);
+  return $output;
+}
+
+function question_add() {
+  // initial form...
+  drupal_set_title(t("Submit a Question"));
+
+  $instructions = check_markup(variable_get('question_instructions', false), variable_get('question_instructions_format', false), false);
+  if (strlen($instructions)) {
+    $output = '<div class="question instructions">' . t($instructions) . '</div>';
+  }
+  
+  $output .= drupal_get_form('question_qform');
+  print theme('page', $output);
+  return;
+}
+
+function theme_question_qform($form) {
+  global $user;
+  return drupal_render($form);
+}
+
+function question_qform() {
+  global $user;
+  
+  // if we are requiring registered users, but user is not logged in
+  if (!$user->uid && variable_get('question_require_registered', FALSE)) {
+    $form['error'] = array(
+	'#type' => 'markup',
+	'#value' => t('<p />Please <a href="!login">login or register</a> to submit questions.', array("!login" => url('user/login', drupal_get_destination())))
+	);
+    return $form;
+  }  
+  // if user is logged in or we're not requiring registered users
+  else if (!variable_get('question_require_registered', FALSE)) {
+     $form['questioner'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Your name'),
+      '#default_value' => $user->name,
+      '#size' => 40,
+      '#maxlength' => 60,
+      '#description' => t('Your name, username, or email address'),
+    );
+  }
+  else {
+    $form['questioner'] = array(
+      '#type' => 'hidden',
+      '#value' => $user->name,
+    );
+  }
+  $form['question'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Question'),
+    '#default_value' => $_POST['question'],
+    '#cols' => 60,
+    '#rows' => 10,
+    '#description' => NULL,
+    '#attributes' => NULL,
+    '#required' => TRUE,
+  );
+  $form[] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit Question'),
+  );
+  $form['#method'] = 'post';
+  $form['#action'] = url('question', drupal_get_destination());
+  return $form;
+}
+
+function question_qform_validate ($form_id, $form_values) {
+  if ($form_values['question'] == '') {
+    form_set_error('question', t('Please enter a question.'));
+  }
+}
+
+function question_qform_submit ($form_id, $form_values) {
+  $qid = db_next_id('question_queue');
+  global $user;
+  $quid = $user->uid;
+  db_query('INSERT INTO {question_queue} (qid, questioner, quid, question) VALUES (%d, "%s", %d, "%s")', $qid, $form_values['questioner'], $quid, $form_values['question']);
+  $path = variable_get('question_thanks', '');
+  $dest = $_REQUEST['destination'];
+  unset($_REQUEST['destination']);
+
+  if (strlen(trim($path))) {
+    // if the 'question thank you node' variable was set...
+    drupal_goto($path);
+  }
+  else {
+    drupal_set_message(t('Your question was submitted.'));
+
+    // if not...
+    if ($dest) {
+      //go back to the original question node...
+      drupal_goto($dest);
+    }
+    else {
+      // last resort
+      drupal_goto('node');
+    }
+  }
+}
+
+/**
+ * This function is for those that want to insert a question form into
+ * a node to make it easier for people to ask questions.  All it does
+ * is pull the rendered form and print it out.
+ */
+
+function question_print_form() {
+	print drupal_get_form('question_qform');
+}
+
+/**
+  * Returns node object for latest question (based on node's creation date)
+  *
+  */
+
+function question_get_latest() {
+  $obj = db_fetch_object(db_query('SELECT n.nid FROM {question_node} q INNER JOIN {node} n ON n.nid = q.nid WHERE n.status = 1 ORDER BY n.created DESC'));
+  if ($obj) {
+    $node = node_load($obj->nid);
+    return $node;
+  } else {
+    return;
+  }
+}
+
+function question_get_random() {
+  $obj = db_fetch_object(db_query('SELECT n.nid FROM {question_node} q INNER JOIN {node} n ON n.nid = q.nid WHERE n.status = 1 ORDER BY RAND()'));
+  if ($obj) {
+    $node = node_load($obj->nid);
+    return $node;
+  } else {
+    return;
+  }
+}
+
+/**
+  * Returns rendered listing of questions
+  * $teaser is a true/false indicating whether the teaser version
+  *   of the node should be displayed
+  * $links is a true/false indicating whether links should be displayed
+  * $joins is a string containing JOIN arguments for SQL call
+  *     example: 'INNER JOIN {term_node} t ON t.nid = q.nid'
+  * $wheres is a string containing additional WHERE arguments
+  *     example: 'AND t.tid = 12'
+  * $order is a string containing ORDER BY
+  *
+  * The above example arguments would return the node ids of all question nodes
+  * that are tagged with taxonomy term 12
+  */
+
+function question_list_questions($teaser = TRUE, $links = FALSE, $joins = '', $wheres = '', $order = 'ORDER BY n.created DESC') {
+  $result = db_query("SELECT n.nid FROM {node} n ".$joins." WHERE n.type = 'question' AND n.status = 1 ".$wheres." ".$order);
+  while ($row = db_fetch_object($result)) {
+    $node = node_load($row->nid);
+    $output .= node_view($node, $teaser, FALSE, $links);
+  }
+  return $output;
+}
+
+/**
+ * Implementation of hook_block.
+ *
+ * Offers 2 blocks: latest question and random question
+ */
+function question_block($op, $delta = 0) {
+  switch ($op) {
+    case 'list':
+      $block[0]['info'] = t('Latest question');
+      $block[1]['info'] = t('Random question');
+
+      return $block;
+    case 'view':
+      if (user_access('access content')) {
+        switch($delta) {
+          case 0:
+            $question = question_get_latest();
+            $block['subject'] = t('Latest question');
+            $block['content'] = theme('question_block', $question);
+         break;
+          case 1:
+            $question = question_get_random();
+            $block['subject'] = t('Random question');
+            $block['content'] = theme('question_block', $question);
+          break;
+        }
+      }
+    return $block;
+  }
+}
+
+function theme_question_block($node) {
+  return theme_question_teaser($node);
+}

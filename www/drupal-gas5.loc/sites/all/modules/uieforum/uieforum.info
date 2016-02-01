@@ -1,0 +1,9 @@
+; $Id: uieforum.info,v 1.1.2.2 2007/03/19 21:50:48 zoro Exp $
+name = UIE Forum
+description = UIEForum module was created to replace the default Drupal forum. Includes many 'regular' features that the basic one doesnt.
+; Information added by drupal.org packaging script on 2008-01-10
+version = "5.x-1.x-dev"
+project = "uieforum"
+datestamp = "1199967103"
+
+ 

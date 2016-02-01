@@ -1,0 +1,9 @@
+<?php
+/**
+* Implementation of hook_install().
+*/
+function relevant_content_install() {
+  drupal_set_message(t("Relevant Content settings are available under !link",
+    array( '!link' => l('Administer > Site configuration > Relevant Content',  'admin/settings/relevant_content' ) )
+  ));
+}

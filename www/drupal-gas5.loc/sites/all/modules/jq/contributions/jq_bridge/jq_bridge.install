@@ -1,0 +1,18 @@
+<?php
+// $Id: jq_bridge.install,v 1.5 2008/05/04 19:03:24 aaron Exp $
+
+function jq_bridge_install() {
+  jq_bridge_reset_jq();
+}
+
+// support for cluetip & jq_bridge
+function jq_bridge_update_1() {
+  jq_bridge_reset_jq();
+}
+
+/**
+ *  register new plugins with jQ
+ */
+function jq_bridge_reset_jq() {
+  cache_clear_all('jq_plugins', 'cache');
+}

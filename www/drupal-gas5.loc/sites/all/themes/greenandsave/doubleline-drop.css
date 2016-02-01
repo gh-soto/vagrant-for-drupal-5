@@ -1,0 +1,178 @@
+/*  zqlab.com
+	 horizontal drop down menu 101
+	*/
+
+/* Replace #doubleline with what you named the Block in Drupal */
+
+/* Height of the block
+	Put background image here */
+#doubleline .content{
+height:55px;
+width:990px;
+}
+/* Do not display Block title */
+#doubleline h2{
+display:none;
+visibility:hidden;
+}
+/* Vertical positioning of the top level menu within the Block body */
+#doubleline ul.menu {
+  margin: 0;
+  border: 0 none;
+  padding: 0;
+  width: 98%; /*For KHTML*/
+  width:990px;
+  list-style: none;
+  padding-top:0px;
+}
+/* Dimensions for the top level menu items */
+#doubleline ul.menu li {
+  margin: 0;
+  border: 0 none;
+  padding: 0px; /* 10 px space left and right side of menu items */
+  float: left; /*For Gecko*/
+  display: inline;
+  list-style: none;
+  position: relative;
+  height: auto;
+  width:100px;
+	text-align:left;
+  z-index:10;
+  border-right:1px solid #121212;
+  height:55px;
+}
+/* Dimensions of the first dropdown menu item
+	and where its vertical positioning is.  */
+#doubleline ul.menu ul {
+  margin: 0;
+  border: 0 none;
+  padding: 0;
+  width: 122px;
+  list-style: none;
+  display: none;		/* Hide state */
+  position: absolute;
+  background:none;
+  top: 54px;
+  left: 0;
+}
+#doubleline ul.menu ul:after /*From IE 7 lack of compliance*/{
+  clear: both;
+  display: block;
+  font: 1px/0px serif;
+  content: ".";
+  height: 0;
+  visibility: hidden;
+}
+#doubleline ul.menu ul li {
+  width: 175px;
+  float: left; /*For IE 7 lack of compliance*/
+  display: block !important;
+  display: inline; /*For IE*/
+  background-color:#fff;
+  height:auto;
+}
+/* Menu Styling
+	top level menu */
+#doubleline ul.menu a {
+  padding: 7px 10px;
+  float: none !important; /*For Opera*/
+  float: left; /*For IE*/
+  display: block;
+  background:none;
+  color: #fff;
+  text-decoration: none;
+  height: auto !important;
+  height: 1%; /*For IE*/
+  text-align:center;
+  height:55px;
+  font: 12px Verdana, Helvetica, sans-serif;
+}
+/* Menu Styling
+	Hovering state of the top level menu */
+#doubleline ul.menu a:hover,
+#doubleline ul.menu li:hover a,
+#doubleline ul.menu li.iehover a,
+#doubleline ul.menu li.active,
+#doubleline ul.menu li.active a{
+  color: #C0EB72;
+  text-decoration:none;
+}
+/* Menu Styling
+	First drop down menu  */
+#doubleline ul.menu li:hover li a,
+#doubleline ul.menu li.iehover li a {
+  float: none;
+  color: #fff;
+  border-bottom:#fff solid 1px;  /* medium grey */
+  border-left:#fff solid 1px;
+  border-right:#fff solid 1px;
+  font-variant:normal;
+  font: 12px/22px Arial, Helvetica, sans-serif;
+  text-align:left;
+  padding:2px 4px;
+  height:auto;
+  background-color:#112640;
+  text-decoration:none;
+  }
+/* Menu Styling
+	First drop down menu Footer image
+	This adds space at the bottom of the menu for an image */
+#doubleline ul.menu li.expanded ul.menu{
+background:none;
+height:auto;
+}
+/* Menu Styling
+	Second drop down menu hovering state */
+#doubleline ul.menu li:hover li a:hover,
+#doubleline ul.menu li:hover li:hover a,
+#doubleline ul.menu li.iehover li a:hover,
+#doubleline ul.menu li.iehover li.iehover a {
+  float: none;
+  background-color: #CAD0D0;
+  color: #000;
+  font-variant:normal;
+  text-decoration:none;
+  font: 12px/22px Arial, Helvetica, sans-serif;
+  height:auto;
+}
+/* Menu Styling
+	Third drop down menu */
+#doubleline ul.menu li:hover li:hover li a,
+#doubleline ul.menu li.iehover li.iehover li a {
+  background-color:#EEF0F0;		
+  color: #000;	  
+  text-align:left;
+  padding-left:5px;
+}
+
+/* Menu Styling
+	Third drop down menu hovering state */
+#doubleline ul.menu li:hover li:hover li a:hover,
+#doubleline ul.menu li:hover li:hover li:hover a,
+#doubleline ul.menu li.iehover li.iehover li a:hover,
+#doubleline ul.menu li.iehover li.iehover li.iehover a {
+  background-color:#005620;		
+  color: #FFF;			/* white text */
+}
+#doubleline ul.menu ul ul,
+#doubleline ul.menu ul ul ul {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 160px;
+}
+/* Do Not Move - Must Come Before display:block for Gecko */
+#doubleline ul.menu li:hover ul ul,
+#doubleline ul.menu li:hover ul ul ul,
+#doubleline ul.menu li.iehover ul ul,
+#doubleline ul.menu li.iehover ul ul ul {
+  display: none;
+}
+#doubleline ul.menu li:hover ul,
+#doubleline ul.menu ul li:hover ul,
+#doubleline ul.menu ul ul li:hover ul,
+#doubleline ul.menu li.iehover ul,
+#doubleline ul.menu ul li.iehover ul,
+#doubleline ul.menu ul ul li.iehover ul {
+  display: block;
+}

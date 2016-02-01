@@ -1,0 +1,11 @@
+; $Id: userpoints_ubercart.info,v 1.1 2007/12/30 22:06:48 bmagistro Exp $
+name = Userpoints Ubercart
+description = Interfaces userpoints with ubercart, so users can get points for purchases.
+version = "5.x-1.5"
+package = Userpoints
+dependencies = userpoints uc_order uc_cart uc_payment
+; Information added by drupal.org packaging script on 2008-03-01
+version = "5.x-1.7"
+project = "userpoints_ubercart"
+datestamp = "1204341014"
+

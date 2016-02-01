@@ -1,0 +1,12 @@
+name = Email single notify
+description = Userpoints email single notification
+dependencies = userpoints
+package = Userpoints
+version = "5.x-0.0"
+
+
+; Information added by drupal.org packaging script on 2007-12-27
+version = "5.x-2.0"
+project = "userpoints_contrib"
+datestamp = "1198796108"
+

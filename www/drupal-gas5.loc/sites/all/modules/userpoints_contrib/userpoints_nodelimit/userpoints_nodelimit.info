@@ -1,0 +1,11 @@
+; $Id: userpoints_nodelimit.info,v 1.1.2.5 2007/06/18 23:07:12 dww Exp $
+name = Userpoints Node Limit
+description = Enables a limit on node creation based on user points
+package = Userpoints
+dependencies = userpoints
+
+; Information added by drupal.org packaging script on 2007-12-27
+version = "5.x-2.0"
+project = "userpoints_contrib"
+datestamp = "1198796108"
+

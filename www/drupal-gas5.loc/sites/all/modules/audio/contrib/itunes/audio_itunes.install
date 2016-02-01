@@ -1,0 +1,50 @@
+<?php
+// $Id: audio_itunes.install,v 1.1 2007/03/13 18:12:54 drewish Exp $
+
+/**
+ * Install the initial schema.
+ */
+function audio_itunes_install() {
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+      db_query("
+        CREATE TABLE {audio_itunes_channel} (
+          `view_id` int(10) unsigned NOT NULL default '0',
+          `subtitle` varchar(255) NOT NULL default '',
+          `summary` longtext NOT NULL,
+          `author` varchar(255) NOT NULL default '',
+          `copyright` varchar(255) NOT NULL default '',
+          `owner_name` varchar(255) NOT NULL default '',
+          `owner_email` varchar(255) NOT NULL default '',
+          `image_url` varchar(255) NOT NULL default '',
+          `block` int(1) unsigned NOT NULL default '0',
+          `explicit` int(1) unsigned NOT NULL default '0',
+          PRIMARY KEY  (`view_id`)
+        ) /*!40100 DEFAULT CHARACTER SET utf8 */;
+      ");
+      db_query("
+        CREATE TABLE {audio_itunes_item} (
+          `vid` int(10) unsigned NOT NULL default '0',
+          `summary` longtext NOT NULL,
+          `subtitle` varchar(255) NOT NULL default '',
+          `explicit` int(1) unsigned NOT NULL default '0',
+          `block` int(1) unsigned NOT NULL default '0',
+          PRIMARY KEY  (`vid`)
+        ) /*!40100 DEFAULT CHARACTER SET utf8 */;
+      ");
+      break;
+    case 'pgsql':
+      break;
+  }
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function audio_itunes_uninstall() {
+  db_query('DROP TABLE {audio_itunes_item}');
+  db_query('DROP TABLE {audio_itunes_channel}');
+
+  //  variable_del('audio_image_size');
+}

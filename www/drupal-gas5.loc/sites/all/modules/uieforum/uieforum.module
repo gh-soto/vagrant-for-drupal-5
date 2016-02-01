@@ -1,0 +1,2674 @@
+<?php
+  global $user, $edit;
+
+/** This function returns the module name.
+    It's used to make it easier to rename the module if neccessary
+**/
+function uieforum_get_module_name()
+{
+  return "uieforum";
+}
+
+/** Set to "forum" - it just makes sense to **/
+function uieforum_get_module_menu_name()
+{
+  $value = variable_get('uieforum_module_name', uieforum_get_module_name());
+  return ($value ? $value : uieforum_get_module_name());
+}
+
+function uieforum_get_module_security_name()
+{
+  return "forum";
+}
+
+function uieforum_get_module_display_name()
+{
+  return "UIE Forum";
+}
+
+function uieforum_process()
+{
+  global $edit, $user;
+  static $COMPLETED;
+  if (!$COMPLETED)
+  {
+    $COMPLETED = true;
+  }
+  else
+  {
+    return;
+  }
+
+  //Timeout for new-post display
+  define('UIE_NODE_NEW_LIMIT', time() - 86400);
+  //include_once('functions.inc.php');
+  include_once(''.drupal_get_path(module,uieforum).'/functions.inc.php');
+
+  /** generic 'c' ... 'command' ... eg: ?c=showthread **/
+  uie_id('c', null, true);
+  uie_id('page', null, true);
+  uie_id('ThreadID', null, true);
+  uie_id('PostID', null, true);
+  uie_id('QuoteID', null, true);
+  $edit = isset($_POST) ? $_POST : false;
+
+  uie_id('fid', null, true);
+
+  if (uie_id('ThreadID') && !uieforum_current_thread())
+    $CurrentThread = uieforum_current_thread(uie_id('ThreadID'));
+
+  if (uie_id('PostID'))
+  {
+    if (!isset($CurrentThread))
+      $CurrentThread = uieforum_current_thread(uie_id('PostID'), 'post');
+    uie_id('ThreadID', $CurrentThread->ThreadID);
+    if (!uieforum_get_post_text())
+    {
+      $pp = uieforum_get_post(uie_id('PostID'));
+      uieforum_get_post_text($pp->Content);
+      uieforum_get_post_title($pp->PostTitle);
+      uieforum_get_edit_reason($pp->EditReason);
+      uieforum_get_post_always_edit($pp->AlwaysEdit);
+    }
+  }
+  elseif (uie_id('QuoteID'))
+  {
+    if (!uieforum_get_post_text())
+    {
+      $pp = uieforum_get_post(uie_id('QuoteID'));
+      $pThread = get_thread($pp->ThreadID);
+      $uieforum_permission = _uieforum_check_access(null, $pThread->ForumID);
+      //Don't allow quoting of posts in restricted forums
+      if(!$uieforum_permission)
+      {
+        drupal_access_denied();
+      }
+
+      uieforum_get_post_text("[quote=".$pp->name."]".$pp->Content."[/quote]\n");
+    }
+    if (!isset($CurrentThread))
+      $CurrentThread = uieforum_current_thread(uie_id('QuoteID'), 'post');
+    uie_id('ThreadID', $CurrentThread->ThreadID);
+  }
+
+  if (uieforum_current_thread())
+    uie_id('fid', $CurrentThread->ForumID);
+
+  uieforum_current_forum(uie_id('fid'));
+  $edit = uieforum_validate_form($edit);
+
+  drupal_add_css(drupal_get_path('module', uieforum_get_module_name()) .'/css/style.css');
+}
+
+
+/** implementation of hook_menu
+**/
+function uieforum_menu()
+{
+  global $user;
+  uieforum_process();
+  $items = array();
+  $admin_only = user_access('administer '.uieforum_get_module_security_name());
+  $admin_access = $admin_only || user_access('moderate '.uieforum_get_module_security_name().'_'.uie_id('fid').'_'.uieforum_get_module_security_name()) ? true : false;
+
+  $items[] = array('path' => uieforum_get_module_menu_name(), 'title' => variable_get('uieforum_title', uieforum_get_module_menu_name()),
+    'callback' => '_uieforum_all',
+    'access' => user_access('access content'),
+    'type' => MENU_CALLBACK);
+  $items[] = array('path' => 'admin/content/'.uieforum_get_module_menu_name(), 'title' => uieforum_get_module_display_name(),
+    'callback' => 'uieforum_admin',
+    'access' => $admin_access,
+    'description' => 'UIE Forum',
+    'type' => MENU_NORMAL_ITEM);
+
+  if (arg(0) == 'user' && is_numeric(arg(1)) && ($admin_access || $user->uid == arg(1)))
+  {
+  }
+  else
+  {
+    $items[] = array('path' => 'admin/content/'.uieforum_get_module_menu_name().'/list', 'title' => t('list'),
+      'access' => $admin_only,
+      'description' => t('List of UIE forums.'),
+      'type' => MENU_DEFAULT_LOCAL_TASK, 'weight' => -10);
+    $items[] = array('path' => 'admin/content/'.uieforum_get_module_menu_name().'/add/forum', 'title' => t('add forum'),
+      'callback' => 'drupal_get_form',
+      'callback arguments' => 'uieforum_admin',
+      'access' => $admin_only,
+      'description' => t('Add a UIE forum.'),
+      'type' => MENU_LOCAL_TASK, 'weight' => -8);
+    $items[] = array('path' => 'admin/content/'.uieforum_get_module_menu_name().'/configure', 'title' => t('configure'),
+      'callback' => 'drupal_get_form',
+      'callback arguments' => 'uieforum_admin_configure',
+      'description' => t('Configure UIE Forum.'),
+      'access' => $admin_only,
+      'type' => MENU_LOCAL_TASK, 'weight' => -7);
+    $items[] = array('path' => 'admin/content/'.uieforum_get_module_menu_name().'/security/list', 'title' => t('security groups'),
+    'description' => t('UIE Forum security groups list.'),
+      'access' => $admin_only,
+      'type' => MENU_LOCAL_TASK, 'weight' => -6);
+    $items[] = array('path' => 'admin/content/'.uieforum_get_module_menu_name().'/security/add', 'title' => t('add security group'),
+      'access' => $admin_only,
+      'description' => t('Add a security rule.'),
+      'type' => MENU_LOCAL_TASK, 'weight' => -5);
+    $items[] = array('path' => 'admin/content/'.uieforum_get_module_menu_name().'/resetcounters', 'title' => t('reset counters'),
+      'callback' => 'uieforum_admin',
+      'description' => t('Reset UIE Forum counters.'),
+      'access' => $admin_only,
+      'type' => MENU_LOCAL_TASK, 'weight' => -4);
+
+    if (arg(4) == 'thread' && is_numeric(arg(5)))
+    {
+      $items[] = array('path' => 'admin/content/'.uieforum_get_module_menu_name().'/edit/thread', 'title' => t('edit thread'),
+      'description' => t('Edit thread.'),
+//      $items[] = array('path' => 'admin/content/'.uieforum_get_module_menu_name().'/thread/edit', 'title' => t('edit thread'),
+        'access' => $admin_access);
+      $items[] = array('path' => 'admin/content/'.uieforum_get_module_menu_name().'/split/thread', 'title' => t('split thread'),
+      'description' => t('Split posts into two threads.'),
+//      $items[] = array('path' => 'admin/content/'.uieforum_get_module_menu_name().'/thread/split', 'title' => t('split thread'),
+        'access' => $admin_access);
+      $items[] = array('path' => 'admin/content/'.uieforum_get_module_menu_name().'/merge/thread', 'title' => t('merge thread'),
+      'description' => t('Merge two threads'),
+//      $items[] = array('path' => 'admin/content/'.uieforum_get_module_menu_name().'/thread/merge', 'title' => t('merge thread'),
+        'access' => $admin_access);
+// Should mod's be allowed to modify forums that they're moderating????
+//      $items[] = array('path' => 'admin/content/'.uieforum_get_module_menu_name().'/edit/forum', 'title' => t('edit forum'),
+////      $items[] = array('path' => 'admin/content/'.uieforum_get_module_menu_name().'/forum/edit', 'title' => t('edit forum'),
+//        'access' => $admin_access);
+    }
+    elseif (arg(4) == 'post' && (is_numeric(arg(5)) || (arg(5) == 'move' && is_numeric(arg(6)))))
+    {
+      $items[] = array('path' => 'admin/content/'.uieforum_get_module_menu_name().'/edit/post', 'title' => t('edit post'),
+      'description' => t('Edit post.'),
+//      $items[] = array('path' => 'admin/content/'.uieforum_get_module_menu_name().'/post/edit', 'title' => t('edit post'),
+        'access' => $admin_access);
+      $items[] = array('path' => 'admin/content/'.uieforum_get_module_menu_name().'/edit/post/move', 'title' => t('edit post'),
+      'description' => t('Move post.'),
+//      $items[] = array('path' => 'admin/content/'.uieforum_get_module_menu_name().'/post/move', 'title' => t('move post'),
+        'access' => $admin_access);
+    }
+  }
+  return $items;
+}
+
+/** implementation of hook_help
+**/
+function uieforum_help($section='')
+{
+  switch ($section)
+  {
+    case "admin/content/".uieforum_get_module_menu_name():
+      return t("This is a listing of the current forums withing the UIEForum module. You can Edit, or go directly to, any forum listed here.");
+    case "admin/content/".uieforum_get_module_menu_name()."/security/list":
+      return t("The security tab is where the uieforum module's user access security system can be integrated with the drupal system. Note that until the actual forums to be restricted have had the relevant security settings applied, these will have no effect.<br /><br />It is <strong>strongly</strong> recommended (ie: just don't) not to modify groups 1, 2 or3 in <strong>any</strong> way at all.<br /><br />Each entry must have a GroupShortName that is unique to all other groups, and a Secured-Group Name, that is unique to all other entries within Drupal's access control system.<br /><br />To add extra moderator groups, ensure that the Secured-Group Name of that group begins with 'moderate ' (eg: 'moderate ".uieforum_get_module_security_name()."_NUM_"."_".uieforum_get_module_security_name()."') - The 'moderate ".uieforum_get_module_security_name()." ' part is hard coded, and is neccessary to allow members of a group to have moderator priviledges, and the NUM is the id of the forum that the group is to be a moderator of");
+    case "admin/content/".uieforum_get_module_menu_name()."/edit/thread":
+      return t("Here you can edit a thread's title, parent forum, and it's locked/sticky status.<br />Note, that delete a thread, also deletes all posts withing that thread - this action can <strong>NOT</strong> be done.");
+    case "admin/content/".uieforum_get_module_menu_name()."/split/thread":
+      return t("Splitting a thread involves removing EVERY post from the current post onwards, and creating a new thread with the newly moved posts. This can be undone by merging the new thread with the original one");
+    case "admin/content/".uieforum_get_module_menu_name()."/merge/thread":
+      return t('Merging a thread with another one cannot be undone. Re-splitting the merged thread may not result in the same 2 threads as before the merge. This is your acknowledgement page - make sure you select the right thread to merge to on this page. Note that merging can only occur within the current forum. If you need to merge into a thread in another forum, first move the thread there, then attempt the merge again.');
+  }
+} // function uieforum_help
+
+/** implementation of hook_perm
+**/
+function uieforum_perm()
+{
+  uieforum_process();
+  $them = array();
+  $terms = get_security_groups();
+  foreach ($terms AS $term)
+    $them[] = $term->GroupName;
+  return $them;
+//  return array('access uieforum', 'post new threads/posts', 'administer uieforum'); //, 'private uieforum');
+} // function uieforum_perm()
+
+/**
+* Generate HTML for the uieforum block
+* @param op the operation from the URL
+* @param delta offset
+* @returns block HTML
+*/
+function uieforum_block($op = 'list', $delta = 0, $edit = array())
+{
+  uieforum_process();
+
+  switch ($op)
+  {
+    case 'list':
+      $block[0]['info'] = variable_get('uieforum_title_block', t('Recent Forum Posts'));
+      return $block;
+
+    case 'configure':
+
+      $output['forum_block_num_'. $delta] = array(
+        '#type' => 'select',
+        '#title' => t('Number of recent posts to display on block'),
+        '#default_value' => variable_get('forum_block_num_'. $delta, 10),
+        '#options' => drupal_map_assoc(array(2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)),
+      );
+      return $output;
+
+    case 'save':
+      variable_set('forum_block_num_'. $delta, $edit['forum_block_num_'. $delta]);
+      break;
+
+    case 'view':
+      return theme_uieforum_block_output($op, $delta, $edit);
+  }
+} // end uieforum_block
+
+
+/**
+* Module configuration settings
+* @return settings HTML or deny access
+*/
+function uieforum_admin_configure()
+{
+  uieforum_process();
+//  system_settings_save();
+
+  $output["Misc"] = array(
+    '#type' => 'fieldset',
+    '#title' => t("Misc"),
+    '#description' => t('Miscellaneous Options'),
+    '#attributes' => null,
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+
+  $output["Misc"]['uieforum_title'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Forum Title (as in the breadcrumbs)'),
+    '#default_value' => variable_get('uieforum_title', uieforum_get_module_name()),
+    '#size' => 30,
+    '#maxlength' => 255,
+    '#description' => t('The title of this forum system that is used by the breadcrumbs to link back to the root forum'),
+  );
+
+  $output["Misc"]['uieforum_title_block'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Block Title'),
+    '#default_value' => variable_get('uieforum_title_block', t('Recent Forum Posts')),
+    '#size' => 30,
+    '#maxlength' => 255,
+    '#description' => t('The title of the UIEForum block. Blank to default to "Recent Forum Posts"'),
+  );
+
+  $output["Misc"]['forum_default_edit_reason'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Default edit-reason'),
+    '#default_value' => variable_get('forum_default_edit_reason', ''),
+    '#size' => 30,
+    '#maxlength' => 255,
+    '#description' => t('The default reason to display on edited posts (if the edit reason has been left blank) - If this is blank, the \'Edit Reason\' text will not show.'),
+  );
+
+  $number = drupal_map_assoc(array(5, 10, 15, 20, 25, 30, 35, 40, 50, 60, 80, 100, 10000));
+  $output["Misc"]['forum_hot_topic'] = array(
+    '#type' => 'select',
+    '#title' => t('Hot topic threshold'),
+    '#default_value' => variable_get('forum_hot_topic', 15),
+    '#options' => $number,
+    '#description' => t('The number of posts a topic must have to be considered hot.'),
+  );
+
+  $number = drupal_map_assoc(array(10, 25, 50, 75, 100));
+  $output["Misc"]['forum_per_page'] = array(
+    '#type' => 'select',
+    '#title' => t('Topics per page'),
+    '#default_value' => variable_get('forum_per_page', 25),
+    '#options' => $number,
+    '#description' => t('The default number of topics displayed per page; links to browse older messages are automatically being displayed.'),
+  );
+
+  $forder = array(1 => t('Date - newest first'), 2 => t('Date - oldest first'), 3 => t('Posts - most active first'), 4=> t('Posts - least active first'));
+//  $number = drupal_map_assoc(array(0, 60, 120, 300, 600, 900, 1800, 2700, 3600, 10800, 18000, 21600, 43200, 86400, 129600, 172800));
+  $number = array(0 => t('Disabled'), 60 => t('1 Minute'), 120 => t('2 Minutes'), 300 => t('5 Minutes'), 600 => t('10 Minutes'), 900 => t('15 Minutes'), 1800 => t('30 Minutes'), 2700 => t('45 Minutes'), 3600 => t('1 Hour'), 10800 => t('3 Hours'), 18000 => t('5 Hours'), 21600 => t('6 Hours'), 43200 => t('12 Hours'), 86400 => t('1 Day'), 129600 => t('36 Hours / 1.5 Days'), 172800 => t('2 Days'), 259200 => t('3 Days'), 432000 => t('5 Days'), 6048000 => t('1 Week'));
+  $output["Misc"]['forum_edit_timeout'] = array(
+    '#type' => 'select',
+    '#title' => t('Maximum Edit Timeout'),
+    '#default_value' => variable_get('forum_edit_timeout', 3600),
+    '#options' => $number,
+    '#description' => t('The time delay before a user can no longer edit a post.'),
+  );
+
+//  $number = drupal_map_assoc(array(0, 5, 10, 15, 30, 45, 60, 120, 150, 180));
+// Disabled is set to 1, as if it is 0, Drupal says it is not set (not just a PHP thing)
+  $number = array(1 => t('Disabled'), 5 => t('5 Seconds'), 10 => t('10 Seconds'), 15 => t('15 Seconds'), 30 => t('30 Seconds'), 45 => t('45 Seconds'), 60 => t('1 Minute'), 120 => t('2 Minutes'), 150 => t('2.5 Minutes'), 180 => t('3 Minutes'), 300 => t('5 Minutes'));
+  $output["Misc"]['forum_newpost_timeout'] = array(
+    '#type' => 'select',
+    '#title' => t('Minimum time between individual posts'),
+    '#default_value' => variable_get('forum_newpost_timeout', 15),
+    '#options' => $number,
+    '#description' => t('The time delay before a user may post a new post (all users, including mods, but excluding admins).'),
+  );
+/*
+  $output["Misc"]['forum_order'] = array(
+    '#type' => 'radios',
+    '#title' => t('Default order'),
+    '#default_value' => variable_get('forum_order', '1'),
+    '#options' => $forder,
+    '#description' => t('The default display order for topics.'),
+  );
+*/
+  $output["Misc"]['uieforum_auto_greet'] = array(
+    '#type' => 'checkbox',
+    '#title' => 'Enable auto-greeting post for new forums',
+    '#description' => t("(default: enabled)"),
+    '#return_value' => 1,
+    '#default_value' => variable_get('uieforum_auto_greet', 1),
+  );
+
+  $output["Misc"]['uieforum_allow_display_avatars'] = array(
+    '#type' => 'checkbox',
+    '#title' => 'UIEForum-wide avatar control. Enable/Disable avatars here',
+    '#description' => t("(default: enabled)"),
+    '#return_value' => 1,
+    '#default_value' => variable_get('uieforum_allow_display_avatars', 1),
+  );
+
+  $output["Misc"]['uieforum_subforum_view'] = array(
+        '#type' => 'checkbox',
+        '#title' => t('Display the first level of sub-forums from the forum-list on all views without threads. (Container-style display for UIEForum)'),
+        '#default_value' => variable_get('uieforum_subforum_view', 0),
+        '#return_value' => 1,
+        '#description' => t("(default: disabled)")
+        );
+  $output["Misc"]['uieforum_show_userbar'] = array(
+  	'#type' => 'checkbox',
+  	'#title' => t('Displays the Userbar above all Forum Views.'),
+  	'#default_value' => variable_get('uieforum_show_userbar', 0),
+  	'#return value' => 1,
+  	'#description' => t('(default: disabled)')
+  );
+
+  $output["Misc"]['uieforum_display_lower_breadcrumbs'] = array(
+  	'#type' => 'checkbox',
+  	'#title' => t('Displays the lower breadcrumbs.'),
+  	'#default_value' => variable_get('uieforum_display_lower_breadcrumbs', 1),
+  	'#return value' => 1,
+  	'#description' => t('(default: enabled)')
+  );
+  
+  
+  $output["Paths"] = array(
+    '#type' => 'fieldset',
+    '#title' => t("Paths"),
+    '#description' => t('Set the various paths for '.uieforum_get_module_name()),
+    '#attributes' => null,
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+
+  $output["Paths"]['uieforum_module_name'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Forum Access Path'),
+    '#default_value' => variable_get('uieforum_module_name', uieforum_get_module_name()),
+    '#size' => 30,
+    '#maxlength' => 255,
+    '#description' => t('The path to the forum in urls. Arguably one of the most important, and useful, settings. Leave blank (or as default - '.uieforum_get_module_name().') for the default value. This value is used for access your forum: http://www.yoursite.com/THISVALUE - By setting this to "forum" you can simply swap over from using the default drupal forum, to using this one, in seconds. Don\'t add slashes, just leave it as if it is a single "folder". You can set this almost anything, but it is advised that you use only normal, one-word, words :)'),
+  );
+
+
+  $output["Paths"]['forum_icon_path'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Forum icon path'),
+    '#default_value' => variable_get('forum_icon_path', 'sites/all/modules/'.uieforum_get_module_name().'/uie'),
+    '#size' => 30,
+    '#maxlength' => 255,
+    '#description' => t('The path to the forum icons.  Leave blank to disable icons. Don\'t add a trailing slash.  Default icons are available in the "sites/all/modules/'.uieforum_get_module_name().'/uie" directory. You may use images of whatever size you wish, but it is recommended to use 15x15 or 16x16. '),
+  );
+
+  $output["Paths"]['forum_smilies_icon_path'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Forum Smilies path'),
+    '#default_value' => variable_get('forum_smilies_icon_path', 'sites/all/modules/'.uieforum_get_module_name().'/uie/uiesmilies'),
+    '#size' => 30,
+    '#maxlength' => 255,
+    '#description' => t('The path to the forum smilies.  Don\'t add a trailing slash.  Default icons are available in the "sites/all/modules/'.uieforum_get_module_name().'/uie/uiesmilies" directory.'),
+  );
+
+  $output["Paths"]['forum_formatting_icon_path'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Forum Text Formatting path'),
+    '#default_value' => variable_get('forum_formatting_icon_path', 'sites/all/modules/'.uieforum_get_module_name().'/uie/textformatting'),
+    '#size' => 30,
+    '#maxlength' => 255,
+    '#description' => t('The path to the forum text formatting (bbcode) images. Don\'t add a trailing slash.  Default icons are available in the "sites/all/modules/'.uieforum_get_module_name().'/uie/textformatting" directory.'),
+  );
+
+
+  $output["Ranks"] = array(
+    '#type' => 'fieldset',
+    '#title' => t("Ranks"),
+    '#description' => t('Miscellaneous Options'),
+    '#attributes' => null,
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+
+  $output['Ranks']['forum_rank_first'] = array(
+    '#type' => 'textfield',
+    '#title' => t('First rank (less than 10 posts)'),
+    '#default_value' => variable_get('forum_rank_first', 'n00b'),
+    '#size' => 30,
+    '#maxlength' => '255',
+    '#description' => t('The rank assigned to a user who has less than ten posts')
+    );
+
+  $output['Ranks']['forum_rank_second'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Second rank (less than 100 posts)'),
+    '#default_value' => variable_get('forum_rank_second', 'Killing Spree'),
+    '#size' => 30,
+    '#maxlength' => '255',
+    '#description' => t('The rank assigned to a user who has less than a hundred posts')
+    );
+
+  $output['Ranks']['forum_rank_third'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Third rank (less than 500 posts)'),
+    '#default_value' => variable_get('forum_rank_third', 'Rampage'),
+    '#size' => 30,
+    '#maxlength' => '255',
+    '#description' => t('The rank assigned to a user who has less than five-hundred posts')
+    );
+
+  $output['Ranks']['forum_rank_fourth'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Fourth rank (less than 1000 posts)'),
+    '#default_value' => variable_get('forum_rank_fourth', 'Dominating'),
+    '#size' => 30,
+    '#maxlength' => '255',
+    '#description' => t('The rank assigned to a user who has less than a thousand posts')
+    );
+
+  $output['Ranks']['forum_rank_fifth'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Fifth rank (less than 4000 posts)'),
+    '#default_value' => variable_get('forum_rank_fifth', 'Unstoppable'),
+    '#size' => 30,
+    '#maxlength' => '255',
+    '#description' => t('The rank assigned to a user who has less than four thousand posts')
+    );
+
+  $output['Ranks']['forum_rank_sixth'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Sixth rank (less than 5000 posts)'),
+    '#default_value' => variable_get('forum_rank_sixth', 'Godlike'),
+    '#size' => 30,
+    '#maxlength' => '255',
+    '#description' => t('The rank assigned to a user who has less than five thousand posts')
+    );
+
+  $output['Ranks']['forum_rank_seventh'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Seventh rank (less than 7000 posts)'),
+    '#default_value' => variable_get('forum_rank_seventh', 'Wicked Sick'),
+    '#size' => 30,
+    '#maxlength' => '255',
+    '#description' => t('The rank assigned to a user who has less than seven thousand posts')
+    );
+
+  $output['Ranks']['forum_rank_eighth'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Eighth rank (7000 or more posts)'),
+    '#default_value' => variable_get('forum_rank_eighth', 'Oh Emm Gee'),
+    '#size' => 30,
+    '#maxlength' => '255',
+    '#description' => t('The rank assigned to a user who has seven thousand (or more) posts')
+    );
+
+
+  $output["Post Creation"] = array(
+    '#type' => 'fieldset',
+    '#title' => t("Post Creation"),
+    '#description' => t('Set post-creation related options'),
+    '#attributes' => null,
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+
+  $output["Post Creation"]['uieforum_create_post_not_allowed_msg'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Message to display when posting is not allowed'),
+    '#default_value' => variable_get('uieforum_create_post_not_allowed_msg', 'Posting not allowed'),
+    '#size' => 30,
+    '#maxlength' => '255',
+    '#description' => t('The message to display when posting is not allowed')
+  );
+
+  $output["Post Creation"]['uieforum_locked_forum_display_msg'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Display message when in a locked forum'),
+    '#default_value' => variable_get('uieforum_locked_forum_display_msg', true),
+    '#return_value' => 1,
+    '#description' => t('Display message telling users that posting is disabled in a locked forum. (default: true)')
+  );
+
+  $output["Post Creation"]['uieforum_locked_forum_admin_create'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Allow admins/mods to create threads in locked forums'),
+    '#default_value' => variable_get('uieforum_locked_forum_admin_create', true),
+    '#return_value' => 1,
+    '#description' => t('(default: true)')
+  );
+
+  $output["Post Creation"]['uieforum_create_post_login_to_reply'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Message to display when posting is allowed, but user is not logged in'),
+    '#default_value' => variable_get('uieforum_create_post_login_to_reply', 'Login to reply'),
+    '#size' => 30,
+    '#maxlength' => '255',
+    '#description' => t('The message to display when posting is allowed, but user is not logged in')
+  );
+
+
+  $output["Post Creation"]['New Thread And Reply'] = array(
+    '#type' => 'fieldset',
+    '#title' => t("New Thread And Reply"),
+    '#description' => t('Configure the text/icons used for "New Thread" and "Reply"'),
+    '#attributes' => null,
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+
+  $output["Post Creation"]['New Thread And Reply']['uieforum_new_thread_content'] = array(
+    '#type' => 'textfield',
+    '#title' => t('New Thread'),
+    '#default_value' => variable_get('uieforum_new_thread_content', 'New Thread'),
+    '#size' => 30,
+    '#maxlength' => '255',
+    '#description' => t('Text to display for "New Thread", or url to a "New Thread" image. Images must be stored locally on the webserver. default: ("New Thread")')
+  );
+
+  $output["Post Creation"]['New Thread And Reply']['uieforum_new_thread_content_is_img'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('New Thread text is an image url'),
+    '#description' => t("(default: disenabled)"),
+    '#return_value' => true,
+    '#default_value' => variable_get('uieforum_new_thread_content_is_img', false),
+  );
+
+  $output["Post Creation"]['New Thread And Reply']['uieforum_reply_content'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Reply'),
+    '#default_value' => variable_get('uieforum_reply_content', 'Reply'),
+    '#size' => 30,
+    '#maxlength' => '255',
+    '#description' => t('Text to display for "Reply", or url to a "Reply" image. Images must be stored locally on the webserver. default: ("Reply")')
+  );
+
+  $output["Post Creation"]['New Thread And Reply']['uieforum_reply_content_is_img'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Reply text is an image url'),
+    '#description' => t("(default: disenabled)"),
+    '#return_value' => true,
+    '#default_value' => variable_get('uieforum_reply_content_is_img', false),
+  );
+
+  $output["Post Creation"]['Reverse Thread Display'] = array(
+    '#type' => 'fieldset',
+    '#title' => t("Reverse Thread Display"),
+    '#description' => t('Configure the display of the current thread (in reverse) on the reply screen'),
+    '#attributes' => null,
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+
+  $output["Post Creation"]['Reverse Thread Display']['forum_show_reversed_thread_on_reply'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Display Reverse Post List for Thread on Reply'),
+    '#description' => t("(default: disabled)"),
+    '#return_value' => 1,
+    '#default_value' => variable_get('forum_show_reversed_thread_on_reply', 0),
+  );
+
+  $output["Post Creation"]['BBCode Buttons'] = array(
+    '#type' => 'fieldset',
+    '#title' => t("BBCode Buttons"),
+    '#description' => t('Enable/Disable individual BBCode buttons'),
+    '#attributes' => null,
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+
+  $output["Post Creation"]['BBCode Buttons']['uieforum_create_post_display_bbcode_bold'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Display Bold BBCode button'),
+    '#description' => t("(default: enabled)"),
+    '#return_value' => 1,
+    '#default_value' => variable_get('uieforum_create_post_display_bbcode_bold', 1),
+  );
+
+  $output["Post Creation"]['BBCode Buttons']['uieforum_create_post_display_bbcode_italic'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Display Italic BBCode button'),
+    '#description' => t("(default: enabled)"),
+    '#return_value' => 1,
+    '#default_value' => variable_get('uieforum_create_post_display_bbcode_italic', 1),
+  );
+
+  $output["Post Creation"]['BBCode Buttons']['uieforum_create_post_display_bbcode_underline'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Display Underline BBCode button'),
+    '#description' => t("(default: enabled)"),
+    '#return_value' => 1,
+    '#default_value' => variable_get('uieforum_create_post_display_bbcode_underline', 1),
+  );
+
+  $output["Post Creation"]['BBCode Buttons']['uieforum_create_post_display_bbcode_url'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Display Url BBCode button'),
+    '#description' => t("(default: enabled)"),
+    '#return_value' => 1,
+    '#default_value' => variable_get('uieforum_create_post_display_bbcode_url', 1),
+  );
+
+  $output["Post Creation"]['BBCode Buttons']['uieforum_create_post_display_bbcode_image'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Display Image BBCode button'),
+    '#description' => t("(default: enabled)"),
+    '#return_value' => 1,
+    '#default_value' => variable_get('uieforum_create_post_display_bbcode_image', 1),
+  );
+
+  $output["Post Creation"]['BBCode Buttons']['uieforum_create_post_display_bbcode_quote'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Display Quote BBCode button'),
+    '#description' => t("(default: enabled)"),
+    '#return_value' => 1,
+    '#default_value' => variable_get('uieforum_create_post_display_bbcode_quote', 1),
+  );
+
+  $output["Post Creation"]['BBCode Buttons']['uieforum_create_post_display_bbcode_code'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Display Code BBCode button'),
+    '#description' => t("(default: enabled)"),
+    '#return_value' => 1,
+    '#default_value' => variable_get('uieforum_create_post_display_bbcode_code', 1),
+  );
+
+  $output["Post Creation"]['BBCode Buttons']['uieforum_create_post_display_bbcode_rant'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Display Rant BBCode button'),
+    '#description' => t("(default: enabled)"),
+    '#return_value' => 1,
+    '#default_value' => variable_get('uieforum_create_post_display_bbcode_rant', 1),
+  );
+
+  $output["Post Creation"]['BBCode Buttons']['uieforum_create_post_display_bbcode_left'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Display Left BBCode button'),
+    '#description' => t("(default: enabled)"),
+    '#return_value' => 1,
+    '#default_value' => variable_get('uieforum_create_post_display_bbcode_left', 1),
+  );
+
+  $output["Post Creation"]['BBCode Buttons']['uieforum_create_post_display_bbcode_center'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Display Center BBCode button'),
+    '#description' => t("(default: enabled)"),
+    '#return_value' => 1,
+    '#default_value' => variable_get('uieforum_create_post_display_bbcode_center', 1),
+  );
+
+  $output["Post Creation"]['BBCode Buttons']['uieforum_create_post_display_bbcode_right'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Display right BBCode button'),
+    '#description' => t("(default: enabled)"),
+    '#return_value' => 1,
+    '#default_value' => variable_get('uieforum_create_post_display_bbcode_right', 1),
+  );
+
+  $output["Post Reporting"] = array(
+    '#type' => 'fieldset',
+    '#title' => t("Post Reporting"),
+    '#description' => t('Set report-post related options'),
+    '#attributes' => null,
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+
+  $output["Post Reporting"]['forum_report_post_email'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Report post email-address'),
+    '#default_value' => variable_get('forum_report_post_email', ''),
+    '#size' => 30,
+    '#maxlength' => 255,
+    '#description' => t('The email address that all reported posts go to. Separate multiple addresses with a comma (,)'),
+  );
+
+  $output["Post Reporting"]['forum_report_post_msg'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Report Post Message'),
+    '#default_value' => variable_get('forum_report_post_msg',  t('Post reported.<br/><br/>Thank you.')),
+    '#cols' => 50,
+    '#rows' => 4,
+    '#description' => t('The text to display to a user when reporting a post - if left blank, the default message is used.'),
+  );
+
+  $output["Post Reporting"]['forum_report_post_allow_comment'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Allow comments to be sent by a post reporter, along with the report-post notification'),
+    '#description' => t("(default: enabled)"),
+    '#return_value' => 1,
+    '#default_value' => variable_get('forum_report_post_allow_comment', 1),
+  );
+/*
+  $output["Post Reporting"]['forum_report_post_require_comment'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Require comment (only effective if commenting is enabled'),
+    '#description' => t("(default: disabled)"),
+    '#return_value' => 1,
+    '#default_value' => variable_get('forum_report_post_require_comment', 0),
+  );
+*/
+  $output["Post Reporting"]['forum_report_post_guest_allow'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Allow guests to report posts'),
+    '#description' => t("(default: disabled)"),
+    '#return_value' => 1,
+    '#default_value' => variable_get('forum_report_post_guest_allow', 0),
+  );
+
+  $output["Filters"] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Filters'),
+      '#description' => t('Which drupal text filters to apply to a forum post'),
+      '#attributes' => null,
+      '#collapsible' => TRUE,
+      '#collapsed' => TRUE,
+  );
+
+  foreach (filter_list_all() as $f => $obj) {
+    $temp[$f] = $obj->name;
+  }
+
+  $output['Filters']['uieforum_enabled_filters'] = array(
+      '#type' => 'checkboxes',
+      '#title' => t('Filter Selection'),
+      '#default_value' => variable_get('uieforum_enabled_filters', array('uieforum/0')),
+      '#options' => $temp,
+      '#description' => t('Select the filters that will be applied to user posts'),
+      );
+
+
+
+  $output["Performance Options"] = array(
+    '#type' => 'fieldset',
+    '#title' => t("Performance Options"),
+    '#description' => t('Disabling each of these will give a varying degrees of performance boosts, but at the expense of functionality (default: all enabled)'),
+    '#attributes' => null,
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+
+  $output["Performance Options"]['uieforum_use_smilies'] = array(
+    '#type' => 'checkbox',
+    '#title' => 'Enable Smilies',
+    '#return_value' => 1,
+    '#default_value' => variable_get('uieforum_use_smilies', 1),
+  );
+
+  $output["Performance Options"]['uieforum_online_status'] = array(
+    '#type' => 'checkbox',
+    '#title' => 'Enable online status indicator',
+    '#return_value' => 1,
+    '#default_value' => variable_get('uieforum_online_status', 1),
+  );
+
+  $output["Performance Options"]['uieforum_ranks'] = array(
+    '#type' => 'checkbox',
+    '#title' => 'Enable user ranks',
+    '#return_value' => 1,
+    '#default_value' => variable_get('uieforum_ranks', 1),
+  );
+
+  $output["Performance Options"]['uieforum_show_registered'] = array(
+    '#type' => 'checkbox',
+    '#title' => 'Enable registered-date display',
+    '#return_value' => 1,
+    '#default_value' => variable_get('uieforum_show_registered', 1),
+  );
+
+  $output["Performance Options"]['uieforum_show_sigs'] = array(
+    '#type' => 'checkbox',
+    '#title' => 'Enable signatures',
+    '#return_value' => 1,
+    '#default_value' => variable_get('uieforum_show_sigs', 1),
+  );
+
+  $output["Performance Options"]['uieforum_user_post_counts'] = array(
+    '#type' => 'checkbox',
+    '#title' => 'Enable (user) post counts',
+    '#return_value' => 1,
+    '#default_value' => variable_get('uieforum_user_post_counts', 1),
+  );
+/*
+  $output2['uieforum_forums_threadpost_counts'] = array(
+  '#type' => 'checkbox',
+  '#title' => 'Enable (forum) thread + post counts',
+  '#return_value' => 1,
+  '#default_value' => variable_get('uieforum_forums_threadpost_counts', 1),
+);
+*/
+
+  $output["Performance Options"]["BBCode filter"] = array(
+    '#type' => 'fieldset',
+    '#title' => t("BBCode filter"),
+    '#description' => t("Whether to encode email addresses with javascript. With this method you will have clickable mailto links, but it will be a bit harder for spam robots to collect them."),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+  $output["Performance Options"]["BBCode filter"]["bbcode_encode_mailto_$format"] = array(
+    '#type' => 'select',
+    '#title' => t("Email address encoding"),
+    '#default_value' => variable_get("bbcode_encode_mailto_$format", 1),
+    '#options' => array(t("Disabled"), t("Enabled")),
+  );
+  $output["Performance Options"]["BBCode filter"]['uieforum_use_bbcode'] = array(
+    '#type' => 'checkbox',
+    '#title' => 'Enable BBCode',
+    '#return_value' => 1,
+    '#default_value' => variable_get('uieforum_use_bbcode', 1),
+  );
+
+  $output['#attributes'] = array("name" => "unreal");
+  return system_settings_form($output);
+}
+
+function _uieforum_check_access($uid = null, $fid = null)
+{
+  global $user;
+  static $perms = array();
+
+  if(!$uid)
+  {
+    $uid = $user->uid;
+  }
+  if(!$fid)
+  {
+    $fid = uie_id('fid');
+  }
+
+  if(!$perms[$uid] || !$perms[$uid][$fid])
+  {
+    $uieforum_permission = (user_access('administer '.uieforum_get_module_security_name()) || user_access('moderate '.uieforum_get_module_security_name().'_'.$fid.'_'.uieforum_get_module_security_name())) ? true : false;
+
+    /** This section is used to check the current user's access rights to the specified forum **/
+    $groups = get_security_groups($fid);
+    if (!$uieforum_permission)
+    {
+      foreach ($groups AS $ga)
+      {
+        if ($ga->HasAccess > 0)
+        {
+          if (user_access($ga->GroupName))
+          {
+            $uieforum_permission = true;
+            break;
+          }
+        }
+      }
+    }
+    $perms[$uid][$fid] = $uieforum_permission;
+  }
+  return $perms[$uid][$fid];
+}
+
+/** Main module display
+**/
+function _uieforum_all()
+{
+  global $user, $edit;
+  uieforum_process();
+
+  $sortby = variable_get('forum_order', 1);
+
+  // content variable that will be returned for display
+  $page_content = '';
+  $uieforum_permission = _uieforum_check_access();
+
+  if (!$uieforum_permission)
+    drupal_access_denied();
+  else
+  {
+    /** CurrentPost is used for editing/quoting posts **/
+    $CurrentPost = false;
+    if (uie_id('PostID'))
+      $CurrentPost = uieforum_get_post(uie_id('PostID'));
+    elseif (uie_id('QuoteID'))
+      $CurrentPost = uieforum_get_post(uie_id('QuoteID'));
+
+    $CurrentForum = uieforum_current_forum(null, true);
+    if (!uie_id('c'))
+    {
+      $subfolders = 0;
+      if(variable_get('uieforum_subforum_view', 0))
+      {
+        $ForumList = get_forums($CurrentForum->ForumID);
+        if($ForumList && count($ForumList)) {
+          foreach($ForumList AS $Forum)
+          {
+            $subfolders += forum_num_children($Forum->ForumID);
+          }
+        }
+      }
+
+      if ($CurrentForum->ThreadCount == 0 && $subfolders && variable_get('uieforum_subforum_view', 0))
+      {
+        $Forums = get_deep_forums(uie_id('fid'));
+      }
+      else 
+      {
+        $Forums = get_forums(uie_id('fid'));
+      }
+      $Threads = get_threads_from_forum(uie_id('fid'));
+    }
+
+    $CurrentThread = uieforum_current_thread();
+    $forumname = $CurrentForum->ForumName;
+
+    $breadcrumbs[] = l(t('Home'), NULL);
+    $breadcrumbs[] = l(variable_get('uieforum_title', uieforum_get_module_name()), uieforum_get_module_menu_name());
+
+    drupal_set_title($forumname);
+
+    if (uie_id('fid') != 1)
+    {
+      /** this entire if block is only entered if the forum selected is NOT the root forum. used to generate breadcrumbs to parent forums **/
+      $parentforum = get_forum($CurrentForum->ParentForum, true);
+      $parentfid = $parentforum->ForumID;
+      $woot = array();
+      while ($parentfid > 1)
+      {
+        $woot[] = l(stripslashes($parentforum->ForumName), uieforum_get_module_menu_name(), null, '&fid='.$parentfid);
+
+        $parentforum = get_forum($parentforum->ParentForum);
+        $parentfid = $parentforum->ForumID;
+
+      }
+      $mmsize = sizeof($woot)-1;
+      for ($ii = $mmsize; $ii >= 0; $ii--)
+        $breadcrumbs[] = $woot[$ii];
+
+      $breadcrumbs[] = l($forumname, uieforum_get_module_menu_name(), null, 'fid='.uie_id('fid'));
+    }
+    
+    //# Add Thread-Title to the breadcrumbs
+    if (uie_id('ThreadID') && uieforum_current_thread())
+      $breadcrumbs[] = get_thread_link_text(uieforum_current_thread(), false);
+      
+    /** Code here generates the links that are shown above/below thread listings **/
+    if (variable_get('uieforum_show_userbar',0))
+    {
+      $page_content .= uieforum_get_forum_user_header($breadcrumbs);
+    }
+
+    $isAdminOrMod = user_access('administer '.uieforum_get_module_security_name()) || user_access('moderate '.uieforum_get_module_security_name().'_'.$fid.'_'.uieforum_get_module_security_name());
+
+    if (($CurrentForum->Locked && variable_get('uieforum_locked_forum_admin_create', true) && $isAdminOrMod) || (user_access('post new threads/posts') && !$CurrentForum->Locked) )
+    {
+//      $NEW_THREAD_TEXT = l(variable_get('uieforum_new_thread_content', t('New Thread')), uieforum_get_module_menu_name(), array('class' => 'newthreadlink'), "c=newpost&fid=".uie_id('fid'), null, null, variable_get('uieforum_new_thread_content_is_img', false));
+      $actualNewThreadText = variable_get('uieforum_new_thread_content', t('New Thread'));
+      $newThreadTextIsUrl = variable_get('uieforum_new_thread_content_is_img', false);
+      if($newThreadTextIsUrl)
+      {
+        $actualNewThreadText = theme('image', $actualNewThreadText);
+      }
+      $actualReplyText = variable_get('uieforum_reply_content', t('Reply'));
+      $replyTextIsUrl = variable_get('uieforum_reply_content_is_img', false);
+      if($replyTextIsUrl)
+      {
+        $actualReplyText = theme('image', $actualReplyText);
+      }
+      $NEW_THREAD_TEXT = l($actualNewThreadText, uieforum_get_module_menu_name(), array('class' => 'newthreadlink'), "c=newpost&fid=".uie_id('fid'), null, null, $newThreadTextIsUrl);
+      $NEW_REPLY_TEXT = l($actualReplyText, uieforum_get_module_menu_name(), array('class' => 'newpostlink'), "c=newpost&ThreadID=".uie_id('ThreadID'), null, null, $replyTextIsUrl);
+    }
+    else if (variable_get('uieforum_locked_forum_display_msg', true) && $CurrentForum->Locked)
+    {
+      $NEW_THREAD_TEXT = variable_get('uieforum_create_post_not_allowed_msg', t('Posting not allowed'));
+      $NEW_REPLY_TEXT = '';
+    }
+    else
+    {
+      $NEW_REPLY_TEXT = l(variable_get('uieforum_create_post_login_to_reply', 'Login to reply'), 'user/login', '', 'destination='.uieforum_get_module_menu_name().'?c=newpost%26ThreadID='.uie_id('ThreadID'));
+      $NEW_THREAD_TEXT = "";
+    }
+
+    if (uie_id('c') == 'showthread' || uie_id('c') == 'newthread' || uie_id('c') == 'newpost' || uie_id('c') == 'editpost' || uie_id('c') == 'reportpost')
+    {
+      $editpost = false;
+      if (uie_id('c') == 'newthread' || uie_id('c') == 'newpost' || uie_id('c') == 'editpost')
+      {
+        if (uie_id('c') == 'editpost') $editpost = true;
+        if (uie_id('c') == 'newthread' || uie_id('c') == 'editpost') uie_id('c', 'newpost');
+      }
+      include(uie_id('c').'.php');
+    }
+    else
+    {
+      $numrows = $CurrentForum->ThreadCount;
+      $pagenumbers = array(array('data' => $NEW_THREAD_TEXT, 'class' => 'created', 'colspan' => '2'), array('data' => uieforum_get_page_numbers($numrows), 'class' => 'forum_pagenums', 'colspan' => '3'));
+
+      if (sizeof($Forums) != 0)
+      {
+        $rows = array();
+        $rows[] = uieforum_get_forum_list_header();
+        foreach ( $Forums as $Forum )
+        {
+          $rows[] = _uieforum_GenerateForumRow($Forum);
+        } //foreach
+        $ForumTable = theme('table', null, $rows, array('class' => 'forum'));
+        $ForumTable = "<center>".$ForumTable."</center>";
+      } // sizeof($Forums)
+
+      if ($CurrentForum->ThreadCount == 0)
+      {
+        $ThreadTable = "";
+        if(variable_get('uieforum_locked_forum_display_msg', true))
+        {
+          $ThreadTable .= '<strong>'.t('No Threads in this forum').'</strong><br />';
+        }
+        if(variable_get('uieforum_locked_forum_admin_create', true))
+        {
+          $ThreadTable .= $NEW_THREAD_TEXT;
+        }
+        $ForumTable .= $ThreadTable ? "<center>".$ThreadTable."</center>" : null;
+      }
+      else
+      {
+        if ($CurrentForum->ThreadCount > 0)
+        {
+          $rows = array();
+          $rows[] = $pagenumbers;
+          $rows[] = uieforum_get_topic_list_header();
+          foreach ( $Threads as $Thread )
+          {
+            $rows[] = _uieforum_GenerateThreadRow($Thread);
+          } // foreach
+          $rows[] = $pagenumbers;
+        }
+        $ThreadTable .= theme('table', null, $rows, array('class' => 'forum'));
+        $ForumTable .= "<center>".$ThreadTable."</center>";
+      }
+    }
+
+    $page_content .= $ForumTable;
+
+    if ($page_content == '')
+    {
+      print theme("page", '');
+      return;
+    }
+    drupal_set_breadcrumb($breadcrumbs);
+
+    //Breadcrumbs on the bottom of the page too, unless we have the userbar enabled
+    if (variable_get('uieforum_display_lower_breadcrumbs', 1))
+    {
+    	$page_content .= "<br /><br />".theme('breadcrumb',$breadcrumbs); 
+    }
+    print theme("page", $page_content);
+  }
+}
+
+/** Generates the code needed for the display of icons for the uieforum module
+**/
+function _uieforum_icon($new_posts, $num_posts = 0, $comment_mode = 0, $is_special = false, $is_smiley = false, $is_text_formatting = false)
+{
+  $base_path = variable_get('forum_icon_path', 'sites/all/modules/'.uieforum_get_module_name().'/uie');
+  $icon = false;
+  if ($base_path)
+  {
+    if (!$is_special)
+    {
+      if ($num_posts > variable_get('forum_hot_topic', 15))
+        $icon = $new_posts ? 'hot-new' : 'hot';
+      else
+        $icon = $new_posts ? 'new' : 'default';
+
+      if ($comment_mode == 1) $icon = 'threadclosed';
+
+      // default
+      if (!$icon) $icon = 'default';
+      $icon = $icon.".png";
+    }
+    else
+    {
+      if ($comment_mode == 1)
+        $icon = 'locked_'.$is_special;
+      else $icon = $is_special;
+    }
+
+    if ($is_smiley) $file = variable_get('forum_smilies_icon_path', 'sites/all/modules/'.uieforum_get_module_name().'/uie/uiesmilies') ."/$icon";
+    elseif ($is_text_formatting) $file = variable_get('forum_formatting_icon_path', 'sites/all/modules/'.uieforum_get_module_name().'/uie/textformatting')."/$icon";
+    else $file = variable_get('forum_icon_path', 'sites/all/modules/'.uieforum_get_module_name().'/uie') ."/forum-$icon";
+
+    $output = theme('image', $file);
+  }
+  else
+    $output = '&nbsp;';
+  if ($new_posts) $output = "<a name=\"new\">$output</a>";
+  return $output;
+}
+
+/** Displays an icon denoting a user's online status
+**/
+function _uieforum_user_online($name, $is_online = false)
+{
+  $alt = $name.' is ';
+  if ($is_online)
+  {
+    $alt .= 'online';
+    $file = variable_get('forum_icon_path', 'sites/all/modules/'.uieforum_get_module_name().'/uie') ."/forum-user_online.gif";
+  }
+  else
+  {
+    $alt .= 'offline';
+    $file = variable_get('forum_icon_path', 'sites/all/modules/'.uieforum_get_module_name().'/uie')."/forum-user_offline.gif";
+  }
+  $output = theme('image', $file, $alt, $alt, '', false);
+  return $output;
+}
+
+/** returns the icon for "last post"
+**/
+function _lastpost_icon()
+{
+  $base_path = variable_get('forum_icon_path', 'sites/all/modules/'.uieforum_get_module_name().'/uie');
+  if ($base_path) {
+    $icon = 'lastpost';
+    // default
+    $file = variable_get('forum_icon_path', 'sites/all/modules/'.uieforum_get_module_name().'/uie') ."/forum-$icon.png";
+
+    $output = theme('image', $file);
+  }
+  else {
+    $output = '&nbsp;';
+  }
+  return $output;
+}
+
+
+/**
+ * Administration page which allows maintaining forums
+ */
+function uieforum_admin()
+{
+  Global $edit;
+  uieforum_process();
+  $op = $_POST['op'];
+  $output = false;
+  $dest = false;
+
+  $argCheck = 2;
+
+  if (empty($op))
+  {
+    if (arg($argCheck) != uieforum_get_module_menu_name())
+    {
+      $op = arg($argCheck++);
+    }
+    else
+    {
+      $op = arg(++$argCheck);
+      $argCheck++;
+    }
+  }
+
+  switch ($op)
+  {
+    case 'resetcounters':
+      if (arg($argCheck) == "forum")
+      {
+        return drupal_get_form("_uieforum_confirm_reset_forum_counters");
+      }
+      elseif (arg($argCheck) == "thread")
+      {
+        $output = drupal_get_form("_uieforum_confirm_reset_thread_counters");
+      }
+      else
+      {
+        drupal_set_title("Counter Reset Panel");
+        $header = array(t('Reset Type'), t('Description'));
+
+        $rows[] = array(l(t('Forum Counters'), "admin/content/".uieforum_get_module_menu_name()."/resetcounters/forum"), t("Reset the post and thread counters all of your forums"));
+        $rows[] = array(l(t('Thread Counters'), "admin/content/".uieforum_get_module_menu_name()."/resetcounters/thread"), t("Reset the post counters all of your threads"));
+
+        $output .= theme('table', $header, $rows);
+      }
+      break;
+
+    case 'security':
+     if (arg($argCheck) == 'add')
+     {
+      $output = drupal_get_form("uieforum_form_security", null, arg($argCheck));
+     }
+     else//security either isnt set, or is set to "list" (hopefully)
+     {
+      $output = uieforum_overview_security();
+     }
+      break;
+    case 'add':
+      if (arg($argCheck) == 'forum')
+        $output = drupal_get_form("uieforum_form_forum", null, $op);
+      break;
+    case 'edit':
+      if (arg($argCheck) == 'forum')
+      {
+        $f = get_forum(arg($argCheck+1), true);
+        if ($f == null) { drupal_not_found(); die(); }
+        $output = drupal_get_form("uieforum_form_forum", (array)($f), $op);
+      }
+      elseif (arg($argCheck) == 'thread')
+      {
+        $f = get_thread(arg($argCheck+1));
+        if ($f == null) { drupal_not_found(); die(); }
+        $output = drupal_get_form("uieforum_form_thread", (array)($f), $op);
+      }
+      elseif (arg($argCheck) == 'security')
+      {
+        $f = get_security_group(arg($argCheck+1));
+        if ($f == null) { drupal_not_found(); die(); }
+        $output = drupal_get_form("uieforum_form_security", (array)($f), $op);
+      }
+      elseif (arg($argCheck) == 'post')
+      {
+        if (!is_numeric(arg($argCheck+1)) && arg($argCheck+1) == 'move' && is_numeric(arg($argCheck+2)))
+        {
+          if (arg($argCheck+2) == null || !arg($argCheck+2)) { drupal_not_found(); die(); }
+          $output = drupal_get_form("_uieforum_confirm_move_post", arg($argCheck+2), $op);
+        }
+        else
+        {
+          $f = uieforum_get_post(arg($argCheck+1));
+          if ($f == null) { drupal_not_found(); die(); }
+          $output = drupal_get_form("_uieforum_confirm_delete_post", (array)($f), $op);
+        }
+      }
+      break;
+    case 'split':
+      if (!$edit['confirm'])
+      {
+        $output = drupal_get_form("_uieforum_confirm_split_thread", arg($argCheck+1), $op);
+      }
+      else
+      {
+        $tester = false;
+        if (isset($edit['UIE_FORUM_EDIT_THREAD']) && $tester = uieforum_split_thread($edit))
+        {
+          if (!$tester)
+          {
+            form_set_error('UIE_FORUM_FORM', $tester);
+            $output = drupal_get_form("_uieforum_confirm_split_thread", $edit['pid'], $op);
+          }
+        }
+        if ($tester)
+          drupal_goto(url(uieforum_get_module_menu_name() ."&c=showthread&ThreadID=".$tester));
+      }
+      break;
+    case 'move':
+      if (!$edit['confirm'])
+      {
+        $output = drupal_get_form("_uieforum_confirm_move_post", arg($argCheck+2), $op);
+      }
+      else
+      {
+        $tester = false;
+        if (isset($edit['UIE_FORUM_EDIT_POST']) && $tester = uieforum_move_post($edit['pid'], $edit['MovePost']))
+        {
+          if (!$tester)
+          {
+            form_set_error('UIE_FORUM_FORM', $tester);
+            $output = drupal_get_form("_uieforum_confirm_move_post", $edit['pid']);
+          }
+        }
+        if ($tester)
+          drupal_goto(url(uieforum_get_module_menu_name() ."&c=showthread&ThreadID=".$tester));
+      }
+      break;
+    case 'merge':
+      if (!$edit['confirm'])
+      {
+        $output = drupal_get_form("_uieforum_confirm_merge_thread", arg($argCheck+1), $op);
+      }
+      else
+      {
+        $tester = false;
+        if (isset($edit['UIE_FORUM_EDIT_THREAD']) && isset($edit['MergeThread']) && $tester = uieforum_merge_thread($edit['tid'], $edit['MergeThread']))
+        {
+          if (!$tester)
+          {
+            form_set_error('UIE_FORUM_FORM', $tester);
+            $output = drupal_get_form("_uieforum_confirm_merge_thread", $edit['tid'], $op);
+          }
+        }
+        if ($tester)
+          drupal_goto(url(uieforum_get_module_menu_name() ."&c=showthread&ThreadID=".$tester));
+      }
+      break;
+    //Needs to be translated
+    case t('Delete'):
+      if (!$edit['confirm'])
+      {
+        if (arg($argCheck+2) == 'forum')
+          $output = drupal_get_form("_uieforum_confirm_delete_forum", $edit, $op);
+        elseif (arg($argCheck+2) == 'thread')
+          $output = drupal_get_form("_uieforum_confirm_delete_thread", $edit, $op);
+        elseif (arg($argCheck+2) == 'post')
+          $output = drupal_get_form("_uieforum_confirm_delete_post", $edit, $op);
+        elseif (arg($argCheck+2) == 'security')
+          $output = drupal_get_form("_uieforum_confirm_delete_group", $edit, $op);
+      }
+      else
+      {
+        $tester = false;
+        if (isset($edit['UIE_FORUM_EDIT_FORUM']) && $tester = uieforum_delete_forum($edit['fid']))
+        {
+          if ($tester)
+          {
+            form_set_error('UIE_FORUM_FORM', $tester);
+            $output = drupal_get_form("_uieforum_confirm_delete_forum", (array)(get_forum($edit['fid'])), $op);
+          }
+        }
+        elseif (isset($edit['UIE_FORUM_EDIT_THREAD']) && $tester = uieforum_delete_thread($edit['tid']))
+        {
+          if ($tester)
+          {
+            form_set_error('UIE_FORUM_FORM', $tester);
+            $output = drupal_get_form("_uieforum_confirm_delete_thread", (array)(get_thread($edit['tid'])), $op);
+          }
+        }
+        elseif (isset($edit['UIE_FORUM_EDIT_POST']) && $tester = uieforum_delete_post($edit['pid']))
+        {
+          if ($tester)
+          {
+            form_set_error('UIE_FORUM_FORM', $tester);
+            $output = drupal_get_form("_uieforum_confirm_delete_post", (array)(uieforum_get_post($edit['pid'])), $op);
+          }
+        }
+        elseif (isset($edit['UIE_FORUM_EDIT_SECURITY_GROUP']) && $tester = delete_security_group($edit['gid']))
+        {
+          if ($tester)
+          {
+            form_set_error('UIE_FORUM_FORM', $tester);
+            $output = _uieforum_confirm_delete_group((array)(get_security_group($edit['gid'])), $op);
+          }
+        }
+        if (!$tester)
+          drupal_goto('admin/content/'.uieforum_get_module_menu_name());
+      }
+      break;
+
+    //Needs to be translated
+    case t('Submit'):
+      if (isset($edit['UIE_FORUM_EDIT_FORUM']) || isset($edit['UIE_FORUM_NEW_FORUM']) || isset($edit['UIE_FORUM_EDIT_THREAD']) || isset($edit['UIE_FORUM_NEW_SECURITY_GROUP']) || isset($edit['UIE_FORUM_EDIT_SECURITY_GROUP']) )
+      {
+        $tester = false;
+        $errors = false;
+
+        if (form_get_errors() != NULL)
+          $errors = true;
+
+          if (isset($edit['UIE_FORUM_EDIT_FORUM']))
+          {
+            $perms = get_security_groups();
+            $arr[] = array();
+
+            foreach ($perms AS $perm)
+            {
+              $permNameToUse = str_replace( " ", "__", $perm->GroupShortName);
+              $short = isset($_POST[$permNameToUse]) ? trim($edit[$permNameToUse]) : false;
+
+              if ($short)
+                $arr[] = $perm->GroupID;
+            }
+
+            if ($errors || $tester = uieforum_edit_forum($edit['ForumID'],$edit['ForumName'],$edit['ForumDesc'],$edit['ParentForum'],$edit['weight'], $arr, $edit['Locked']))
+            {
+              if ($tester)
+                drupal_set_message("Forum Edited");
+              $output = drupal_get_form("uieforum_form_forum", $edit);
+              drupal_goto('admin/content/'.uieforum_get_module_menu_name().'/list');
+            }
+          }
+          elseif (isset($edit['UIE_FORUM_NEW_FORUM']) && ($errors || $tester = uieforum_add_forum($edit['ForumName'],$edit['ForumDesc'],$edit['ParentForum'], $edit['weight'])))
+          {
+            if ($tester)
+              drupal_set_message("Forum Created");
+            drupal_goto('admin/content/'.uieforum_get_module_menu_name().'/list');
+          }
+          elseif (isset($edit['UIE_FORUM_EDIT_THREAD']) && ($errors || $tester = uieforum_edit_thread($edit['ThreadID'], $edit['ThreadTitle'],$edit['Locked'],$edit['Sticky'], $edit['ForumID'])))
+          {
+            if ($tester)
+              drupal_set_message("Thread Edited");
+            $output = drupal_get_form("uieforum_form_thread", $edit);
+          }
+          elseif (isset($edit['UIE_FORUM_NEW_SECURITY_GROUP']) && ($errors || $tester = add_security_group(addslashes($edit['GroupName']), $edit['GroupShortName'])))
+          {
+            if ($tester)
+              drupal_set_message("Security Group created");
+              $output = drupal_get_form("uieforum_form_security", $edit, $op);
+            drupal_goto('admin/content/'.uieforum_get_module_menu_name().'/security/list');
+          }
+          elseif (isset($edit['UIE_FORUM_EDIT_SECURITY_GROUP']) && ($errors || $tester = edit_security_group($edit['GroupID'], addslashes($edit['GroupName']), $edit['GroupShortName'])))
+          {
+            if ($tester)
+              drupal_set_message("Security Group edited");
+              $output = drupal_get_form("uieforum_form_security", $edit, $op);
+            drupal_goto('admin/content/'.uieforum_get_module_menu_name().'/security/list');
+          }
+          break;
+      }
+      elseif ($edit['UIE_FORUM_RESET_COUNTERS_FORUM'])
+      {
+        set_time_limit(0);
+        uieforum_update_all_counts("forums");
+        drupal_goto('admin/content/'.uieforum_get_module_menu_name().'/resetcounters');
+      }
+      elseif ($edit['UIE_FORUM_RESET_COUNTERS_THREAD'])
+      {
+        set_time_limit(0);
+        uieforum_update_all_counts("threads");
+        drupal_goto('admin/content/'.uieforum_get_module_menu_name().'/resetcounters');
+      }
+      elseif (!$tester)
+        drupal_goto('admin/content/'.uieforum_get_module_menu_name());
+
+    default:
+      $output = uieforum_overview();
+      break;
+  }
+
+  if (!$output)
+    drupal_goto('admin/content/'.uieforum_get_module_menu_name());
+  print theme('page', $output);
+  die();
+}
+
+
+/**
+ * Returns an overview list of existing forums and containers
+ */
+function uieforum_overview()
+{
+  $header = array(t('Forum Name'), t('Edit'));
+
+//  $rows[] = array(array('data' => '<em>' . t('You may add some on the <a href="%forum">add forum</a> pages.', array('%forum' => url('admin/forum/add/forum'))) . '</em>', 'colspan' => 2));
+//  $output = t('You can configure this module <a href="%configure">here</a><br /><br />', array('%configure' => url('admin/forum/configure')));
+
+  $tree = get_forums_indented(uieforum_current_forum());
+  if ($tree)
+  {
+    foreach ($tree as $term)
+      $rows[] = array(_uieforum_depth($term[1]) . " " . l(check_plain($term[0]->ForumName), uieforum_get_module_menu_name(), null, "fid=".$term[0]->ForumID), l(t('edit forum'), "admin/content/".uieforum_get_module_menu_name()."/edit/forum/".$term[0]->ForumID));
+  }
+  else
+    $rows[] = array(array('data' => '<em>' . t('There are no existing forums.') . '</em>', 'colspan' => 2));
+
+  $output .= theme('table', $header, $rows);
+  return $output;
+}
+
+/**
+ * Returns an overview list of existing security restricted groups (separate to drupal ones) ... this populates the drupal thingy
+ */
+function uieforum_overview_security()
+{
+  $header = array(t('Secured-Group Name'), t('GroupShortName'), t('Edit'));
+
+//  $rows[] = array(array('data' => '<em>' . t('You may add some on the <a href="%forum">add forum</a> pages.', array('%forum' => url('admin/forum/add/forum'))) . '</em>', 'colspan' => 2));
+//  $output = t('You can configure this module <a href="%configure">here</a><br /><br />', array('%configure' => url('admin/forum/configure')));
+
+  $tree = get_security_groups();
+  if ($tree)
+  {
+    foreach ($tree as $term)
+      $rows[] = array(check_plain($term->GroupName), check_plain($term->GroupShortName), l(t('edit group'), "admin/content/".uieforum_get_module_menu_name()."/edit/security/".$term->GroupID));
+  }
+  else
+    $rows[] = array(array('data' => '<em>' . t('There are no existing groups.') . '</em>', 'colspan' => 2));
+
+  $output .= theme('table', $header, $rows);
+  return $output;
+}
+
+/**
+ * Helper function used to generate indentation for forum list
+ *
+ * @param $depth Depth of the indentation
+ * @param $graphic HTML text to be repeated for each stage of depth
+ */
+function _uieforum_depth($depth, $graphic = '--') {
+  for ($n = 0; $n < $depth; $n++) {
+    $result .= $graphic;
+  }
+  return $result;
+}
+
+/**
+ * Formats a topic for display
+ *
+ * @TODO Give a better description. Not sure where this function is used yet.
+ */
+function _uieforum_format($topic, $lastposter = false) {
+  if ($topic && $topic->Posted) {
+    return t('%time<br />by %author', array('%time' => format_date($topic->Posted, 'small'), '%author' => $lastposter ? theme('username', $lastposter) : theme('username', $topic)));
+  }
+  else {
+    return t('n/a');
+  }
+}
+
+/* validate verify */
+function uieforum_validate_form($edit)
+{
+  global $user;
+
+  if (isset($edit['PostTitle'])) $val = module_invoke(uieforum_get_module_name(), 'filter', 'process', null, null, $edit['PostTitle']);
+  if (isset($edit['PostText'])) $val = module_invoke(uieforum_get_module_name(), 'filter', 'process', null, null, $edit['PostText']);
+
+  if ($edit && isset($edit['UIE_FORUM_FORM']))
+  {
+    if (isset($edit['UIE_FORUM_EDIT_FORUM']) || isset($edit['UIE_FORUM_NEW_FORUM']))
+    {
+      $ForumName = isset($edit['ForumName']) ? trim($edit['ForumName']) : false;
+
+      if (!$ForumName)
+        form_set_error('ForumName', t('You must enter a Forum Name'));
+    }
+    elseif (isset($edit['UIE_FORUM_EDIT_THREAD']))
+    {
+      $ThreadTitle = isset($edit['ThreadTitle']) ? trim($edit['ThreadTitle']) : false;
+
+      if (!$ThreadTitle)
+        form_set_error('ThreadTitle', t('You must enter a Thread Title'));
+    }
+    elseif (isset($edit['UIE_FORUM_NEW_SECURITY_GROUP']) || isset($edit['UIE_FORUM_EDIT_SECURITY_GROUP']))
+    {
+       if (!isset($edit['GroupID']) && isset($edit['UIE_FORUM_EDIT_SECURITY_GROUP']))
+         form_set_error('GroupID', t('GroupID not set - please contact a site developer with this error.'));
+
+       $GroupName = isset($edit['GroupName']) ? trim($edit['GroupName']) : false;
+       $GroupShortName = isset($edit['GroupShortName']) ? trim($edit['GroupShortName']) : false;
+       if (!$GroupName)
+         form_set_error('GroupName', t('GroupName must be set.'));
+       if (!$GroupShortName)
+         form_set_error('GroupShortName', t('GroupShortName must be set.'));
+    }
+    elseif (isset($edit['UIE_FORUM_EDIT_POST']))
+    {
+      $PostID = isset($edit['PostID']) ? trim($edit['PostID']) : false;
+/*      if (!uieforum_get_edit_reason())
+         form_set_error('EditReason', t('A reason <strong>must</strong> be given for editing'));
+*/
+      if (!$PostID)
+         form_set_error('PostID', t('PostID not set - please contact a site developer with this error.'));
+
+      if (!uieforum_get_post_text())
+        form_set_error('PostText', t('You must enter a thread body'));
+    }
+    else
+    {
+      if (!uie_id('ThreadID') && !uieforum_get_post_title())
+        form_set_error('PostTitle', t('You must enter a thread title'));
+
+      if (!uieforum_get_post_text())
+        form_set_error('PostText', t('You must enter a thread body'));
+    }
+
+/*    if (isset($edit['PostTitle'])) $edit['PostTitle'] = filter_xss($edit['PostTitle'], '');
+    if (isset($edit['PostText'])) $edit['PostText'] = filter_xss($edit['PostText'], '');*/
+  }
+  return $edit;
+}
+
+/**
+ * Returns a form for adding/editing a forum
+ *
+ * @param $edit Associative array containing a forum arrayed object to be added or edited.
+ */
+function uieforum_form_forum($edit = array(), $op = false)
+{
+  global $user;
+
+  $form['ForumName'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Forum name'),
+    '#default_value' => $edit['ForumName'],
+    '#size' => 50,
+    '#maxlength' => 64,
+    '#description' => t('The name is used to identify the forum.'),
+    '#attributes' => NULL,
+    '#required' => TRUE,
+  );
+
+  $form['ForumDesc'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Description'),
+    '#default_value' => $edit['ForumDesc'],
+    '#cols' => 60,
+    '#rows' => 5,
+    '#description' => t('The description can be used to provide more information about the forum, or further details about the topic.'),
+  );
+
+  $form['Locked'] = array(
+    '#type' => 'checkbox',
+    '#title' => 'Forum Locked (Posting not allowed in this forum if box is ticked).<div class="description">Note that this is <strong>not</strong> recursive. This will <strong>not</strong> affect forums contained within this one.</div>',
+    '#return_value' => 1,
+    '#default_value' => $edit['Locked'],
+  );
+
+  if ($edit['ForumID'] != 1)
+  {
+    $form = _uieforum_parent_select($form, $edit['ParentForum'], $edit, t('Parent'), 'ParentForum');
+  }
+  $form['weight'] = array(
+    '#type' => 'weight',
+    '#title' => t('Weight'),
+    '#default_value' => $edit['weight'],
+    '#delta' => 10,
+    '#description' => t('In listings, the heavier (with a higher weight value) terms will sink and the lighter terms will be positioned nearer the top.'),
+  );
+
+  $form["Access Control"] = array(
+    '#type' => 'fieldset',
+    '#title' => t("Access Control"),
+    '#description' => t('No Access Controls to add for this forum'),
+    '#attributes' => null,
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+
+  if (($op && $op == 'edit') || isset($edit['UIE_FORUM_EDIT_FORUM']))
+  {
+    $all_perms = get_security_groups();
+    $perms = get_security_groups($edit['ForumID']);
+    $permCount = 0;
+
+    foreach ($all_perms AS $all)
+    {
+      $has_acc = false;
+      foreach ($perms AS $perm)
+      {
+       $has_acc = $perm->HasAccess && $perm->GroupShortName == $all->GroupShortName ? true : false;
+       if ($has_acc)
+       {
+        break;
+       }
+      }
+      if ($has_acc || $user->uid == 1 || user_access('administer '.uieforum_get_module_security_name()))
+      {
+       $form["Access Control"][$all->GroupShortName] = array(
+         '#type' => 'checkbox',
+         '#title' => 'Access for group: \''.$all->GroupName.'\'',
+         '#return_value' => 1,
+         '#default_value' => $has_acc,
+         '#name' => str_replace( " ", "__", $all->GroupShortName),
+      );
+      $permCount++;
+     }
+    }
+
+    if ($permCount > 0)
+    {
+      $form['UIE_FORUM_EDIT_FORUM'] = array(
+        '#type' => 'hidden',
+        '#value' => 1,
+       );
+       $form["Access Control"]['#description'] = t('Access Control');
+    }
+  }
+  if (($op && $op == 'add') || isset($edit['UIE_FORUM_NEW_FORUM']))
+  {
+    $form['UIE_FORUM_NEW_FORUM'] = array(
+      '#type' => 'hidden',
+      '#value' => 1,
+    );
+
+    $groups = get_security_groups();
+    foreach ($groups as $g) {
+      $form["Access Control"][$g->GroupShortName] = array(
+          '#type' => 'checkbox',
+          '#title' => 'Access for group: \''.$g->GroupName.'\'',
+          '#return_value' => 1,
+          '#default_value' => 0,
+          '#name' => str_replace( " ", "__", $all->GroupShortName),
+          );
+    }
+
+    foreach ( array('forum_access', 'forum_post') as $g) {
+      $form['Access Control'][$g]['#default_value'] = 0;
+    }
+    $form["Access Control"]['#description'] = t('Access Control');
+  }
+  $form['UIE_FORUM_FORM'] = array(
+    '#type' => 'hidden',
+    '#value' => 1,
+  );
+
+  $form['ForumID'] = array(
+    '#type' => 'hidden',
+    '#value' => $edit['ForumID'],
+  );
+
+  $form[] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit'),
+  );
+
+  if ($edit['ForumID'] && $edit['ForumID'] != 1)
+  {
+    $form[] = array(
+      '#type' => 'submit',
+      '#value' => t('Delete'),
+    );
+  }
+  $form['#attributes'] = array('id' => 'unreal');
+  return $form;
+}
+
+/**
+ * Returns a form for adding/editing a thread
+ *
+ * @param $edit Associative array containing a thread arrayed object to be added or edited.
+ */
+function uieforum_form_thread($edit = array(), $op = false)
+{
+  $form['ThreadTitle'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Thread Title'),
+    '#default_value' => $edit['ThreadTitle'],
+    '#size' => 50,
+    '#maxlength' => 64,
+    '#description' => t('The thread\'s title.'),
+    '#attributes' => NULL,
+    '#required' => TRUE,
+  );
+
+  $mod_only = true;
+  if (user_access('administer '.uieforum_get_module_security_name()))
+  {
+    $mod_only = false;
+  }
+
+  $form = _uieforum_parent_select($form, $edit['ForumID'], null, t('Parent Forum'), 'ForumID', $mod_only);
+
+  $form['Locked'] = array(
+    '#type' => 'checkbox',
+    '#title' => 'Locked',
+    '#return_value' => 1,
+    '#default_value' => $edit['Locked'],
+  );
+  $form['Sticky'] = array(
+    '#type' => 'checkbox',
+    '#title' => 'Sticky',
+    '#return_value' => 1,
+    '#default_value' => $edit['Sticky'],
+  );
+  $form['Submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit'),
+  );
+
+  if ($edit['ThreadID'])
+  {
+    $form['Delete'] = array(
+      '#type' => 'submit',
+      '#value' => t('Delete'),
+    );
+    $form['ThreadID'] = array(
+      '#type' => 'hidden',
+      '#value' => $edit['ThreadID'],
+    );
+  }
+
+  if (($op && $op == 'edit') || isset($edit['UIE_FORUM_EDIT_THREAD']))
+  {
+    $form['UIE_FORUM_EDIT_THREAD'] = array(
+      '#type' => 'hidden',
+      '#value' => 1,
+    );
+  }
+  $form['UIE_FORUM_FORM'] = array(
+    '#type' => 'hidden',
+    '#value' => 1,
+  );
+  $form['#attributes'] = array('id' => 'unreal');
+  return $form;
+
+}
+
+/**
+ * Returns a form for deleting a post
+ *
+ * @param $edit Associative array containing a post arrayed object to be deleted
+ */
+function uieforum_form_post($edit = array(), $op = false)
+{
+  $form .= t('Delete post %post<br /><br />', array('%post' => $edit['PostID']));
+
+  if ($edit['PostID'])
+  {
+    $form[] = array(
+      '#type' => 'submit',
+      '#value' => t('Delete'),
+    );
+    $form['PostID'] = array(
+      '#type' => 'hidden',
+      '#value' => $edit['PostID'],
+    );
+  }
+
+  if (($op && $op == 'edit') || isset($edit['UIE_FORUM_EDIT_POST']))
+  {
+    $form['UIE_FORUM_EDIT_POST'] = array(
+      '#type' => 'hidden',
+      '#value' => 1,
+    );
+  }
+  $form['UIE_FORUM_FORM'] = array(
+    '#type' => 'hidden',
+    '#value' => 1,
+  );
+  $form['#attributes'] = array('id' => 'unreal');
+  return $form;
+
+}
+
+/**
+ * Returns a form for adding/editing a forum
+ *
+ * @param $edit Associative array containing a forum arrayed object to be added or edited.
+ */
+function uieforum_form_security($edit = array(), $op = false)
+{
+  $form['GroupName'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Group name'),
+    '#default_value' => $edit['GroupName'],
+    '#size' => 50,
+    '#maxlength' => 64,
+    '#description' => t('The name is used to identify the group.'),
+    '#attributes' => NULL,
+    '#required' => TRUE,
+  );
+  $form['GroupShortName'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Group shortname'),
+    '#default_value' => $edit['GroupShortName'],
+    '#size' => 50,
+    '#maxlength' => 64,
+    '#description' => t('The name is used to identify the group in forums.'),
+    '#attributes' => NULL,
+    '#required' => TRUE,
+  );
+
+  $form[] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit'),
+  );
+  if ($edit['GroupID'])
+  {
+    $form['GroupID'] = array(
+      '#type' => 'hidden',
+      '#value' => $edit['GroupID'],
+    );
+    $form[] = array(
+      '#type' => 'submit',
+      '#value' => t('Delete'),
+    );
+  }
+
+  if (($op && $op == 'edit') || isset($edit['UIE_FORUM_EDIT_SECURITY_GROUP']))
+  {
+    $form['UIE_FORUM_EDIT_SECURITY_GROUP'] = array(
+      '#type' => 'hidden',
+      '#value' => 1,
+    );
+  }
+  if (($op && $op == 'add') || isset($edit['UIE_FORUM_NEW_SECURITY_GROUP']))
+  {
+    $form['UIE_FORUM_NEW_SECURITY_GROUP'] = array(
+      '#type' => 'hidden',
+      '#value' => 1,
+    );
+  }
+  $form['UIE_FORUM_FORM'] = array(
+    '#type' => 'hidden',
+    '#value' => 1,
+  );
+  $form['#attributes'] = array('id' => 'unreal');
+  return $form;
+}
+
+/**  Returns a form_select object containing a tree-like structure of the forum list, excluding itself.
+**/
+function _uieforum_parent_select($form, $currentparent, $fid, $title, $name, $mod_only = false)
+{
+  $forum = $fid;
+  if (is_array($fid)) $forum = (object) ($fid);
+  elseif (is_int($fid)) $forum = get_forum($fid, true);
+
+  $tree = get_forums_indented(null, null, $forum->ForumID, $mod_only);
+  foreach ($tree as $term)
+  {
+    if ($term[0]->ForumID != $forum->ForumID)
+      $options[$term[0]->ForumID] = _uieforum_depth($term[1])." ".$term[0]->ForumName;
+  }
+  $form[$name] = array(
+    '#type' => 'select',
+    '#title' => $title,
+    '#default_value' => $currentparent,
+    '#options' => $options,
+    '#description' => NULL,
+    '#extra' => 0,
+    '#multiple' => FALSE,
+    '#required' => TRUE,
+  );
+  return $form;
+}
+
+/**  Returns a form_select object containing a tree-like structure of the threads in a given forum
+**/
+function _uieforum_merge_select($form, $fid, $tid, $title, $name)
+{
+  $forum = get_forum($fid, true);
+
+  $tree = get_threads_from_forum($fid);
+  foreach ($tree as $term)
+  {
+    if ($term->ThreadID != $tid)
+      $options[$term->ThreadID] = "(".$term->ThreadID.") ".$term->ThreadTitle;
+  }
+  $description = null;
+  if (sizeof($options) <= 0)
+  {
+   $description = "There are no other threads to select from";
+   $options = array();
+  }
+  $form[$name] = array(
+    '#type' => 'select',
+    '#title' => $title,
+    '#default_value' => null,
+    '#options' => $options,
+    '#description' => $description,
+    '#extra' => 0,
+    '#multiple' => FALSE,
+    '#required' => TRUE,
+  );
+  return $form;
+}
+
+/**
+ * Returns a confirmation page for deleting a forum
+ *
+ * @param $did ID of the forum to be deleted
+ */
+function _uieforum_confirm_delete_forum($Forum)
+{
+  $form['UIE_FORUM_EDIT_FORUM'] = array(
+    '#type' => 'hidden',
+    '#value' => 1,
+  );
+  $form['fid'] = array(
+    '#type' => 'hidden',
+    '#value' => $Forum['ForumID'],
+  );
+
+  return confirm_form($form, 
+                      t('Are you sure you want to delete the forum \'%name\'?', array('%name' => $Forum['ForumName'])),
+                      'admin/content/'.uieforum_get_module_menu_name(),
+                      t('Deleting a forum or container will delete all sub-forums, as well as any threads contained in these. This action CANNOT be undone.'),
+                      t('Delete'),
+                      t('Cancel')
+                    );
+}
+
+/**
+ * Returns a confirmation page for deleting a thread
+ *
+ * @param $did ID of the thread to be deleted
+ */
+function _uieforum_confirm_delete_thread($Thread)
+{
+  $form['UIE_FORUM_EDIT_THREAD'] = array(
+    '#type' => 'hidden',
+    '#value' => 1,
+  );
+  $form['fid'] = array(
+    '#type' => 'hidden',
+    '#value' => $Thread['ForumID'],
+  );
+  $form['tid'] = array(
+    '#type' => 'hidden',
+    '#value' => $Thread['ThreadID'],
+  );
+  return confirm_form($form, 
+                      t('Are you sure you want to delete the thread \'%name\'?', array('%name' => $Thread['ThreadTitle'])),
+                      'admin/content/'.uieforum_get_module_menu_name(),
+                      t('Deleting a thread will delete all posts within it. This action CANNOT be undone.'),
+                      t('Delete'),
+                      t('Cancel')
+                    );
+}
+
+/**
+ * Returns a confirmation page for deleting a post
+ *
+ * @param $did ID of the post to be deleted
+ */
+function _uieforum_confirm_delete_post($Post)
+{
+  $form['UIE_FORUM_EDIT_POST'] = array(
+    '#type' => 'hidden',
+    '#value' => 1,
+  );
+  $form['pid'] = array(
+    '#type' => 'hidden',
+    '#value' => $Post['PostID'],
+  );
+
+  return confirm_form($form, 
+                      t('Are you sure you want to delete the post \'%name\'?', array('%name' => $Post['PostID'])),
+                      'admin/content/'.uieforum_get_module_menu_name(),
+                      t('Deleting a post is permanent. This action CANNOT be undone.'),
+                      t('Delete'),
+                      t('Cancel')
+                    );
+}
+
+/**
+ * Returns a confirmation page for moving a post
+ *
+ * @param $did ID of the post to be deleted
+ */
+function _uieforum_confirm_move_post($PostID)
+{
+  $Post = uieforum_get_post($PostID);
+  $Thread = get_thread_from_post($PostID);
+  $form['UIE_FORUM_EDIT_POST'] = array(
+    '#type' => 'hidden',
+    '#value' => 1,
+  );
+  $form['pid'] = array(
+    '#type' => 'hidden',
+    '#value' => $PostID,
+  );
+  $form['fid'] = array(
+    '#type' => 'hidden',
+    '#value' => $Thread->ForumID,
+  );
+
+  $form = _uieforum_merge_select($form, $Thread->ForumID, $Post->ThreadID, t('Move to'), 'MovePost');
+
+  return confirm_form($form, 
+                      t('Are you sure you want to move the post \'%name\'?', array('%name' => t($PostID))),
+                      'admin/content/'.uieforum_get_module_menu_name(),
+                      t('Moving a post is not permanent. This action can be undone by moving the post back to its original thread.'),
+                      'move',
+                      t('Cancel')
+                    );
+}
+
+/**
+ * Returns a confirmation page for deleting a post
+ *
+ * @param $did ID of the post to be deleted
+ */
+function _uieforum_confirm_delete_group($Group)
+{
+  $form['UIE_FORUM_EDIT_SECURITY_GROUP'] = array(
+    '#type' => 'hidden',
+    '#value' => 1,
+  );
+  $form['gid'] = array(
+    '#type' => 'hidden',
+    '#value' => $Group['GroupID'],
+  );
+
+  return confirm_form($form, 
+                      t('Are you sure you want to delete the group \'%name\'?', array('%name' => $Group['GroupName'])),
+                      'admin/content/'.uieforum_get_module_menu_name(),
+                      t('Deleting a Group is permanent. This action CANNOT be undone.'),
+                      t('Delete'),
+                      t('Cancel')
+                    );
+
+}
+
+/**
+ * Returns a confirmation page for deleting a forum
+ *
+ * @param $did ID of the forum to be deleted
+ */
+function _uieforum_confirm_split_thread($PostID)
+{
+  $Thread = get_thread_from_post($PostID);
+  $Post = uieforum_get_post($PostID);
+  $form['UIE_FORUM_EDIT_THREAD'] = array(
+    '#type' => 'hidden',
+    '#value' => 1,
+  );
+  $form['fid'] = array(
+    '#type' => 'hidden',
+    '#value' => $Thread->ForumID,
+  );
+  $form['tid'] = array(
+    '#type' => 'hidden',
+    '#value' => $Thread->ThreadID,
+  );
+  $form['title'] = array(
+    '#type' => 'hidden',
+    '#value' => $Thread->ThreadTitle,
+  );
+  $form['pid'] = array(
+    '#type' => 'hidden',
+    '#value' => $PostID,
+  );
+  $form['poster'] = array(
+    '#type' => 'hidden',
+    '#value' => $Post->Poster,
+  );
+  $form['posted'] = array(
+    '#type' => 'hidden',
+    '#value' => $Post->Posted,
+  );
+
+  return confirm_form($form, 
+                      t('Are you sure you want to split the thread \'%name\' from post %post (inclusive) onwards?', array('%name' => $Thread->ThreadTitle, '%post' => $PostID)),
+                      'admin/content/'.uieforum_get_module_menu_name(),
+                      t('Splitting a thread involves removing EVERY post from the current post onwards, and creating a new thread with the newly moved posts. This can be undone by merging the new thread with the original one.'),
+                      'split',
+                      t('Cancel')
+                    );
+}
+
+/**
+ * Returns a confirmation page for resetting the post and thread counters for the entire system
+ */
+function _uieforum_confirm_reset_forum_counters()
+{
+  $form1['UIE_FORUM_RESET_COUNTERS_FORUM'] = array(
+    '#type' => 'hidden',
+    '#value' => 1,
+  );
+  return confirm_form($form1,
+                      t('Are you sure you want to reset the post and thread counters all of your forums?'),
+                      'admin/content/'.uieforum_get_module_menu_name(),
+                      t('Once this has begun, it may take some time to complete, depending on the size of your forum.'),
+                      t('Submit'),
+                      null
+                    );
+}
+
+function _uieforum_confirm_reset_thread_counters()
+{
+  $form['UIE_FORUM_RESET_COUNTERS_THREAD'] = array(
+    '#type' => 'hidden',
+    '#value' => 1,
+  );
+
+  return confirm_form($form, 
+                      t('Are you sure you want to reset the post counters all of your threads?'),
+                      'admin/content/'.uieforum_get_module_menu_name(),
+                      t('Once this has begun, it may take some time to complete, depending on the number of threads/posts.'),
+                      t('Submit'),
+                      null
+                    );
+}
+
+/**
+ * Returns a confirmation page for deleting a forum
+ *
+ * @param $did ID of the forum to be deleted
+ */
+function _uieforum_confirm_merge_thread($ThreadID)
+{
+  $Thread = get_thread($ThreadID);
+  $form['UIE_FORUM_EDIT_THREAD'] = array(
+    '#type' => 'hidden',
+    '#value' => 1,
+  );
+  $form['fid'] = array(
+    '#type' => 'hidden',
+    '#value' => $Thread->ForumID,
+  );
+  $form['tid'] = array(
+    '#type' => 'hidden',
+    '#value' => $ThreadID,
+  );
+  $form = _uieforum_merge_select($form, $Thread->ForumID, $ThreadID, t('Merge to'), 'MergeThread');
+
+  return confirm_form($form, 
+                      t('Are you sure you want to merge the thread \'%name\'?', array('%name' => $Thread->ThreadTitle, '%post' => $ThreadID)),
+                      'admin/content/'.uieforum_get_module_menu_name(),
+                      t('Merging a thread with another one cannot be undone. Re-splitting the merged thread may not result in the same 2 threads as before the merge. This is your acknowledgement page - make sure you select the right thread to merge to on this page. Note that merging can only occur within the current forum. If you need to merge into a thread in another forum, first move the thread there, then attempt the merge again.'),
+                      'merge',
+                      t('Cancel')
+                    );
+}
+
+/** Returns a users's last visit to a thread
+**/
+function _uieforum_user_last_visit($ThreadID = '')
+{
+  global $user;
+  $F_History = array();
+
+  if (empty($F_History))
+  {
+  	if ($ThreadID == '')
+  	{
+  		$result = db_query('SELECT timestamp FROM {f_history} WHERE uid = %d ORDER BY timestamp DESC', $user->uid);
+  		$t = db_fetch_object($result);
+  		return $t->timestamp;
+  	}
+  	else 
+  	{
+    	$result = db_query('SELECT ThreadID, timestamp FROM {f_history} WHERE uid = %d', $user->uid);
+    	while ($t = db_fetch_object($result))
+      	$F_History[$t->ThreadID] = $t->timestamp > UIE_NODE_NEW_LIMIT ? $t->timestamp : UIE_NODE_NEW_LIMIT;
+  	}
+  }
+  return $F_History[$ThreadID] ? $F_History[$ThreadID] : UIE_NODE_NEW_LIMIT;
+}
+
+/** Updates a users's history on a thread.
+**/
+function uieforum_tag_new($ThreadID)
+{
+  global $user;
+
+  if ($user->uid)
+  {
+    if (uieforum_last_viewed($ThreadID))
+      db_query('UPDATE {f_history} SET timestamp = %d WHERE uid = %d AND ThreadID = %d', time(), $user->uid, $ThreadID);
+    else
+      @db_query('INSERT INTO {f_history} (uid, ThreadID, timestamp) VALUES (%d, %d, %d)', $user->uid, $ThreadID, time());
+  }
+}
+
+/** Returns a users's last visit to a thread
+**/
+function uieforum_last_viewed($ThreadID)
+{
+  global $user;
+  static $history;
+
+  if (!isset($history[$ThreadID]))
+    $history[$ThreadID] = db_fetch_object(db_query("SELECT timestamp FROM {f_history} WHERE uid = '$user->uid' AND ThreadID = %d", $ThreadID));
+
+  return ($history[$ThreadID]->timestamp ? $history[$ThreadID]->timestamp : 0);
+}
+
+/** implementation of hook_cron
+**/
+function uieforum_cron()
+{
+  db_query('DELETE FROM {f_history} WHERE timestamp < %d', UIE_NODE_NEW_LIMIT);
+}
+
+/**
+ * Implementation of hook_search().
+ */
+function uieforum_search($op = 'search', $keys = null)
+{
+  switch ($op)
+  {
+    case 'name':
+      if (user_access('access '.uieforum_get_module_security_name()))
+        return t(uieforum_get_module_menu_name());
+    case 'search':
+      uieforum_process();
+      if (user_access('access '.uieforum_get_module_security_name()))
+      {
+        $find = array();
+        // Replace wildcards with MySQL/PostgreSQL wildcards.
+        $keys = preg_replace('!\*+!', '%', $keys);
+        $q = "SELECT t.ThreadID, t.*, p.*, {f_forums}.* FROM {f_threads} t, {f_posts} p, {f_forums} WHERE LOWER(p.Content) LIKE LOWER('%%%s%%') AND t.ThreadID=p.ThreadID AND {f_forums}.ForumID=t.ForumID";
+        $q .= get_allowed_forums();
+//        $q .= " GROUP BY t.ThreadID";
+        $q .= " ORDER BY p.Posted DESC";
+
+        $result = pager_query($q, 15, 0, NULL, $keys);
+//$find[] = array('title' => $q);
+        while ($row = db_fetch_object($result))
+        {
+            $find[] = array('link' => url(uieforum_get_module_menu_name(), "&c=showthread&ThreadID=".$row->ThreadID),
+                            'type' => $row->ForumName,
+                            'title' => $row->ThreadTitle,
+                            'user' => theme('username', user_load(array('uid' => $row->Poster))),
+                            'date' => uieforum_parse_date($row->Posted),
+                            'snippet' => search_excerpt($keys, $row->Content));
+        }
+        return $find;
+      }
+  }
+}
+
+function _uieforum_GenerateThreadRow($Thread)
+{
+  global $user;
+
+  $Num = $Thread->PostCount - 1;
+  if (!$Num)
+    $Num = 0;
+
+  $locked = $Thread->Locked;// == "Yes" ? '1' : '0';
+  $sticky = $Thread->Sticky;// == "Yes" ? '1' : '0';
+
+  if ($user->uid)
+  {
+    $history = uieforum_last_viewed($Thread->ThreadID);
+	// $lastything = uieforum_parse_date(LastPost);
+	// $has_new_replies = ($lastything > $history) ? ($lastything > UIE_NODE_NEW_LIMIT) : false;
+  	$has_new_replies = ($Thread->LastPost > $history) ? ($Thread->LastPost-$history > UIE_NODE_NEW_LIMIT) : false;
+  }
+  else
+  {
+    // Do not track "new replies" status for topics if the user is anonymous.
+    $has_new_replies = 0;
+  }
+
+  $topic = $sticky ? '<strong>[ '.t('Sticky').' ]</strong> ' : '';
+  $topic .= $has_new_replies ? '<strong>' : '';
+  $topic .= get_thread_link_text($Thread, false);
+  $topic .= $has_new_replies ? '</strong>' : '';
+  if (user_access('administer '.uieforum_get_module_security_name()) || user_access('moderate '.uieforum_get_module_security_name().'_'.uie_id('fid').'_'.uieforum_get_module_security_name()))
+    $topic .= ' :: '.l('[ '.t('edit').' ]', "admin/content/".uieforum_get_module_menu_name()."/edit/thread/$Thread->ThreadID", null, "destination=".uieforum_get_module_menu_name()."&c=showthread&ThreadID=$Thread->ThreadID");
+
+  $topic .= "<br /><em>".theme('username', user_load(array('uid' => $Thread->Creator)))."</em>";
+
+  $rows = array();
+
+  $rows[] = array('data' => _uieforum_icon($has_new_replies, $Num, $locked), 'class' => 'uieforumicon');
+  $rows[] = array('data' => $topic, 'class' => 'topic');
+  $rows[] = array('data' => $Num, 'class' => 'replies');
+  $rows[] = array('data' => $Thread->ViewCount, 'class' => 'replies');
+  $rows[] = array('data' => uieforum_parse_date($Thread->LastPost)."<br />by ".theme('username', user_load(array('uid' => $Thread->LastPoster)))." ".get_thread_link_text_last_post($Thread, _uieforum_icon(null, null, null, 'newpost.gif')), 'class' => 'created');
+
+  return $rows;
+}
+
+function _uieforum_GenerateForumRow($Forum)
+{
+  global $user;
+
+  if ($Forum->Depth == 1) 
+  {
+    $topic = l($Forum->ForumName, uieforum_get_module_menu_name(), null, "fid=$Forum->ForumID");
+    $rows = array(
+      array('data' => $topic, 'class' => 'container', 'colspan' => '5')
+    );
+  }
+  else 
+  {
+    $ThreadInfo = get_last_forum_post($Forum);
+
+    $topic = l($Forum->ForumName, uieforum_get_module_menu_name(), null, "fid=$Forum->ForumID")."<div class='description'>".check_plain($Forum->ForumDesc);
+
+    if (user_access('administer '.uieforum_get_module_security_name()))// || user_access('moderate '.uieforum_get_module_security_name().'_'.$Forum->ForumID.'_'.uieforum_get_module_security_name()))//Should Mods be allowed to edit forums that they have mod status on?
+      $topic .= t(' :: ').l(t('edit forum'), "admin/content/".uieforum_get_module_menu_name()."/edit/forum/$Forum->ForumID", null, "destination="."/".uieforum_get_module_menu_name()."&fid=$Forum->ParentForum");
+    $topic .= "</div>";
+
+// Edit by Mike - Mar 20 2008
+// Timestamp fix
+if(intval($ThreadInfo->LastPost) > 0)
+{   
+#echo $ThreadInfo->LastPost.' '; 
+    $lastreply = uieforum_parse_date($ThreadInfo->LastPost)."<br />by ".theme('username', user_load(array('uid' => $ThreadInfo->uid)))." ".get_thread_link_text_last_post($ThreadInfo, _uieforum_icon(null, null, null, 'newpost.gif'));
+}
+// End edit
+
+    $ico = _uieforum_icon(NULL, NULL, $Forum->Locked, 'forum.png');
+    $rows = array(
+      array('data' => $ico, 'class' => 'uieforumicon uieicon-'.preg_replace('/\s/', '', $Forum->ForumName)),
+      array('data' => $topic, 'class' => 'topic'),
+      array('data' => $Forum->TotalThreadCount, 'class' => 'numtopics'),
+      array('data' => $Forum->TotalPostCount, 'class' => 'numposts'),
+      array('data' => $lastreply, 'class' => 'uieforum-last-reply')
+    );
+  }
+  return $rows;
+}
+
+function uie_id($type, $new = false, $forcecheck = false)
+{
+  global $edit;
+  static $fid = 1;
+  static $c = false;
+  static $page = false;
+  static $ThreadID = false;
+  static $PostID = false;
+  static $QuoteID = false;
+  $returner = false;
+
+  if ($new)
+  {
+    if (is_numeric($new))
+    {
+      switch ($type)
+      {
+        case 'fid': $fid = $new; break;
+        case 'page': $page = $new; break;
+        case 'ThreadID': $ThreadID = $new; break;
+        case 'PostID': $PostID = $new; break;
+        case 'QuoteID': $PostID = $new; break;
+      }
+    }
+    else
+    {
+      switch ($type)
+      {
+        case 'c': $c = $new; break;
+      }
+    }
+  }
+  elseif ($forcecheck)
+  {
+    switch ($type)
+    {
+      case 'fid':
+        $fid = isset($edit['ForumID']) && is_numeric($edit['ForumID']) ? $edit['ForumID'] : $fid;
+        $fid = isset($edit['fid']) && is_numeric($edit['fid']) ? $edit['fid'] : $fid;
+        $fid = isset($_GET['fid']) && is_numeric($_GET['fid']) ? $_GET['fid'] : $fid;
+
+        $selectedForum = false;
+        if (arg(3) == 'post')
+        {
+          if (is_numeric(arg(4)))
+          {
+            $selectedForum = get_forum_from_post(arg(4));
+          }
+          elseif (arg(4) == 'move' && is_numeric(arg(5)))
+          {
+            $selectedForum = get_forum_from_post(arg(5));
+          }
+        }
+        elseif (arg(3) == 'thread')
+        {
+          $selectedForum = false;
+          if (is_numeric(arg(4)))
+          {
+            $selectedForum = get_forum_from_post(arg(4));
+          }
+          elseif (arg(4) == 'move' && is_numeric(arg(5)))
+          {
+            $selectedForum = get_forum_from_post(arg(5));
+          }
+        }
+        if ($selectedForum)
+        {
+          $fid = $selectedForum->ForumID;
+        }
+
+        break;
+      case 'c':
+        $c = isset($_GET['c']) ? $_GET['c'] : false;
+        break;
+      case 'page':
+        $page = isset($_GET['page']) && is_numeric($_GET['page']) ? $_GET['page'] : 1;
+        break;
+      case 'ThreadID':
+        $ThreadID = isset($_GET['ThreadID']) && is_numeric($_GET['ThreadID']) ? $_GET['ThreadID'] : false;
+        if (!$ThreadID && is_numeric(arg(4)))
+          $ThreadID = arg(4);
+        break;
+      case 'PostID':
+        $PostID = isset($_GET['PostID']) && is_numeric($_GET['PostID']) ? $_GET['PostID'] : false;
+        break;
+      case 'QuoteID':
+        $QuoteID = isset($_GET['QuoteID']) && is_numeric($_GET['QuoteID']) ? $_GET['QuoteID'] : false;
+        break;
+    }
+  }
+  switch ($type)
+  {
+    case 'fid': return $fid; break;
+    case 'page': return $page; break;
+    case 'c': return $c; break;
+    case 'ThreadID': return $ThreadID; break;
+    case 'PostID': return $PostID; break;
+    case 'QuoteID': return $QuoteID; break;
+  }
+  return false;
+}
+
+//This code was originally taken from bbcode.module (4.5.0) and modified to suit this all-in-one module (uieforum)
+function uieforum_filter($op, $delta = 0, $format = -1, $text = '', $force_check = false, $parseUIEText = true)
+{
+  switch ($op) {
+    case 'list':
+      return array(0 => uieforum_get_module_name().' BBCode + Smilies');
+
+    case 'description':
+      return t('Converts BBCode to html for the '.uieforum_get_module_name().' module, as well as taking care of the smilies');
+
+    case 'process':
+      if ($force_check)
+      {
+//        $text = check_markup($text);
+        $text = check_plain($text);
+        $text = filter_xss($text);
+      }
+      $patterns = array("/\n/i");
+      $replaces = array("<br />");
+      if ($parseUIEText)
+      {
+        //
+        //# First, filter out code/pre blocks
+        //#  Code-Block Filtering taken from MyBB / www.mybboard.com
+        preg_match_all("#\[(code|pre|php)\](.*?)\[/\\1\](\r\n?|\n?)#si", $text, $preBlocks, PREG_SET_ORDER);
+        $text = preg_replace("#\[(code|pre|php)\](.*?)\[/\\1\](\r\n?|\n?)#si", "{{uie-code}}", $text);
+
+        //# Apply Smilie-Graphics
+        if (variable_get('uieforum_use_smilies', 1))
+        {
+          $smilies_array = uieforum_get_smiley_list();
+
+          /** Generate array of regexes and replaces **/
+          $smilies_preg = array();
+          $smilies_replace = array();
+          foreach ($smilies_array as $sm)
+          {
+            $smilies_preg[] = $sm[1];
+            $smilies_replace[] = $sm[2];
+          }
+
+          $text = preg_replace($smilies_preg, $smilies_replace, $text);
+        }
+
+        //# Run the message through the BBCode handler
+        if (variable_get('uieforum_use_bbcode', 1))
+        {
+          include_once(''.drupal_get_path(module,uieforum).'/bbcode-filter.inc');
+          $text = _uieforum_bbcode_filter_process($text, $format);
+        }
+         $text = preg_replace($patterns, $replaces, $text);
+               
+        //# Re-Apply the taken out Codeblocks
+        if (count($preBlocks)) 
+        {
+          foreach ($preBlocks AS $pre)
+          {
+           switch (strtolower($pre[1]))
+           {
+            case 'pre':
+            case 'code':
+             $text = preg_replace("#\{\{uie-code\}\}\n?#", _uieforum_bbcode_pre_tag($pre[2]), $text, 1);
+             break;
+            case 'php':
+              $text = preg_replace("#\{\{uie-code\}\}\n?#", _uieforum_bbcode_php_tag($pre[2]), $text, 1);
+              break;
+           }
+          }
+        }
+//        $text = wordfilter_filter('process', null, null, $text);
+      }
+
+      return $text;
+
+    default:
+      return $text;
+  }
+}
+
+function uieforum_form(&$node)
+{
+  $output = "<br><br><bR>'".$node."'<br><br><bR>";
+
+  $form['body'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Body'),
+    '#default_value' => $node->body,
+    '#cols' => 60,
+    '#rows' => 20,
+    '#description' => '',
+  );
+  $output .= form_textarea(t('Body'), 'body', $node->body, 60, 20, '');
+  $output .= filter_form('format', $node->format);
+
+  return $output;
+}
+
+function theme_uieforum_block_output($op='list', $delta=0, $edit = array())
+{
+  if (user_access('access '.uieforum_get_module_security_name()))
+  {
+    $sidenumposts = variable_get('forum_block_num_'. $delta, 10);
+    $SideThreads = uieforum_get_last_posts($sidenumposts);
+    $sidecounter = 0;
+
+    $SideThreadTable = "<ul class=\"uieforum_ul\">";
+
+    if ($SideThreads != FALSE)
+    {
+      foreach ($SideThreads as $Thread)
+      {
+        $SideThreadTable .= "<li class=\"uieforum_leaf\">";
+        $SideThreadTable .= "<div class=\"uieforum-forumname\">".l($Thread->ForumName, uieforum_get_module_menu_name(), null, "fid=$Thread->ForumID")."</div>";
+        $SideThreadTable .= "<div class=\"uieforum-thread\">".get_thread_link_text($Thread, false)."</div>";
+        $SideThreadTable .= "<div class=\"uieforum-user\">".theme('username', user_load(array('uid' => $Thread->LastPoster)))."</div>";
+        $SideThreadTable .= "<div class=\"uieforum_block_poster_info\">".get_thread_link_text_last_post($Thread, uieforum_parse_date($Thread->LastPost, "d M 'y - H:i")._uieforum_icon(null, null, null, 'newpost.gif'))."</div>\n";
+        $SideThreadTable .= "</li>";
+      }
+    }
+
+    $SideThreadTable .= "</ul><div class=\"readmore\"><a href=\"/forum\">read more</a></div>";
+
+    drupal_add_css(drupal_get_path('module', uieforum_get_module_name()) .'/css/style.css');
+    $block_content .= $SideThreadTable;
+
+
+    // check to see if there was any content before setting up the block
+    if ($block_content == '')
+      return;
+
+    // set up the block
+    $block['subject'] = variable_get('uieforum_title_block', t('Recent Forum Posts'));
+    $block['content'] = $block_content;
+    return $block;
+  }
+}

@@ -1,0 +1,10 @@
+; $Id$
+name = uBrowser
+description = Browse taxonomy like a file tree for easy node selection.
+
+
+; Information added by drupal.org packaging script on 2008-02-11
+version = "5.x-1.3"
+project = "ubrowser"
+datestamp = "1202754621"
+

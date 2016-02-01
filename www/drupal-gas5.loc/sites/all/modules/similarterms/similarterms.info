@@ -1,0 +1,9 @@
+; $Id: similarterms.info,v 1.1.2.1 2007/06/06 21:43:25 jjeff Exp $
+name = Similar By Terms
+description = "Display a block of other content that is similar by keywords (taxonomy terms)."
+
+; Information added by drupal.org packaging script on 2008-07-19
+version = "5.x-1.9"
+project = "similarterms"
+datestamp = "1216435512"
+

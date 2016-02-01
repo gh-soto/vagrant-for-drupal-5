@@ -1,0 +1,171 @@
+/*  zqlab.com
+	 horizontal drop down menu 101
+	*/
+
+/* Replace #portalnav with what you named the Block in Drupal */
+
+/* Height of the block
+	Put background image here */
+#portalnav .content{
+height:28px;
+width:400px;
+/* background:url('img/hr-nav-bg.jpg') left repeat-x; */
+}
+/* Do not display Block title */
+#portalnav h2{
+display:none;
+visibility:hidden;
+}
+/* Vertical positioning of the top level menu within the Block body */
+#portalnav ul.menu {
+  margin: 0;
+  border: 0 none;
+  padding: 0;
+  width: 98%; /*For KHTML*/
+  width:420px;
+  list-style: none;
+  height: 20px;
+  padding-top:0px;
+  z-index:20;
+	position:relative;
+}
+/* Dimensions for the top level menu items */
+#portalnav ul.menu li {
+  margin: 0; 
+  padding: 0px 2px; /*  border-right: 1px solid #ccc;10 px space left and right side of menu items */
+  float: left; /*For Gecko*/
+  display: inline;
+  list-style: none;
+  position: relative;
+  height: auto;
+  width:auto;
+	text-align:left;
+  z-index:20 !important;
+}
+/* Dimensions of the first dropdown menu item
+	and where its vertical positioning is.  */
+#portalnav ul.menu ul {
+  margin: 0;
+  border: 0 none;
+  padding: 0px;
+  width: 115px;
+  list-style: none;
+  display: none;		/* Hide state */
+  position: absolute;
+  background:none;
+  top: 18px;
+	left: 0;
+}
+#portalnav ul.menu ul:after /*From IE 7 lack of compliance*/{
+  clear: both;
+  display: block;
+  font: 1px/0px serif;
+  content: ".";
+  height: 0;
+  visibility: hidden;
+}
+#portalnav ul.menu ul li {
+  width: 160px;
+  float: left; /*For IE 7 lack of compliance*/
+  display: block !important;
+  display: inline; /*For IE*/
+  border:none;
+}
+/* Menu Styling
+	top level menu */
+#portalnav ul.menu a {
+  padding: 0px 10px;
+  float: none !important; /*For Opera*/
+  float: left; /*For IE*/
+  display: block;
+  background: none;
+  color: #fff;
+  text-decoration: none;
+  height: auto !important;
+  height: 1%; /*For IE*/
+  text-align:center;
+}
+#portalnav ul.menu li.expanded{
+    background: url('img/portal-arrow.png')  left no-repeat;
+
+}
+/* Menu Styling
+	Hovering state of the top level menu */
+#portalnav ul.menu a:hover,
+#portalnav ul.menu li:hover a,
+#portalnav ul.menu li.iehover a {
+  color: #fff;
+
+}
+/* Menu Styling
+	First drop down menu  */
+#portalnav ul.menu li:hover li a,
+#portalnav ul.menu li.iehover li a {
+  float: none;
+  background: #515151;
+  color: #fff;
+  border-bottom:#ccc solid 1px;  /* medium grey */
+  border-left:#ccc solid 1px;
+  border-right:#ccc solid 1px;
+  text-align:left;
+  padding:2px 4px;
+  }
+/* Menu Styling
+	First drop down menu Footer image
+	This adds space at the bottom of the menu for an image */
+#portalnav ul.menu li.expanded ul.menu{
+background:none;
+height:auto;
+}
+/* Menu Styling
+	Second drop down menu hovering state */
+#portalnav ul.menu li:hover li a:hover,
+#portalnav ul.menu li:hover li:hover a,
+#portalnav ul.menu li.iehover li a:hover,
+#portalnav ul.menu li.iehover li.iehover a {
+  float: none;
+  background-color: #999;
+  color: #fff;
+  text-decoration:none;
+}
+/* Menu Styling
+	Third drop down menu */
+#portalnav ul.menu li:hover li:hover li a,
+#portalnav ul.menu li.iehover li.iehover li a {
+  background-color:#999;
+  color: #fff;
+  text-align:left;
+  padding-left:5px;
+}
+
+/* Menu Styling
+	Third drop down menu hovering state */
+#portalnav ul.menu li:hover li:hover li a:hover,
+#portalnav ul.menu li:hover li:hover li:hover a,
+#portalnav ul.menu li.iehover li.iehover li a:hover,
+#portalnav ul.menu li.iehover li.iehover li.iehover a {
+  background-color:#515151;
+  color: #FFF;
+}
+#portalnav ul.menu ul ul,
+#portalnav ul.menu ul ul ul {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 160px;
+}
+/* Do Not Move - Must Come Before display:block for Gecko */
+#portalnav ul.menu li:hover ul ul,
+#portalnav ul.menu li:hover ul ul ul,
+#portalnav ul.menu li.iehover ul ul,
+#portalnav ul.menu li.iehover ul ul ul {
+  display: none;
+}
+#portalnav ul.menu li:hover ul,
+#portalnav ul.menu ul li:hover ul,
+#portalnav ul.menu ul ul li:hover ul,
+#portalnav ul.menu li.iehover ul,
+#portalnav ul.menu ul li.iehover ul,
+#portalnav ul.menu ul ul li.iehover ul {
+  display: block;
+}

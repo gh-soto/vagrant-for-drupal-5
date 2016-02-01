@@ -1,0 +1,170 @@
+<?php
+
+	function uieforum_uninstall()
+	{
+		db_query('DROP TABLE IF EXISTS {f_forums}');
+		db_query('DROP TABLE IF EXISTS {f_groups}');
+		db_query('DROP TABLE IF EXISTS {f_groups_access}');
+		db_query('DROP TABLE IF EXISTS {f_history}');
+		db_query('DROP TABLE IF EXISTS {f_posts}');
+		db_query('DROP TABLE IF EXISTS {f_threads}');
+
+		db_query("DELETE FROM {node} WHERE type = 'uieforum'");
+
+		variable_del('uieforum_title');
+		variable_del('forum_default_edit_reason');
+		variable_del('forum_hot_topic');
+		variable_del('forum_per_page');
+		variable_del('forum_edit_timeout');
+		variable_del('forum_newpost_timeout');
+		variable_del('forum_order');
+		variable_del('uieforum_auto_greet');
+		variable_del('uieforum_module_name');
+		variable_del('forum_icon_path');
+		variable_del('forum_smilies_icon_path');
+		variable_del('forum_formatting_icon_path');
+		variable_del('forum_report_post_email');
+		variable_del('forum_report_post_msg');
+		variable_del('forum_report_post_allow_comment');
+		variable_del('forum_report_post_guest_allow');
+		variable_del('uieforum_use_smilies');
+		variable_del('uieforum_online_status');
+		variable_del('uieforum_ranks');
+		variable_del('uieforum_show_registered');
+		variable_del('uieforum_show_sigs');
+		variable_del('uieforum_user_post_counts');
+		variable_del('uieforum_forums_threadpost_counts');
+		variable_del('uieforum_use_bbcode');
+	}
+
+  function uieforum_install()
+  {
+    switch ($GLOBALS['db_type'])
+    {
+      case 'mysql':
+      case 'mysqli':
+//      db_query("DROP TABLE IF EXISTS {f_forums}");
+      db_query("CREATE TABLE {f_forums} (
+        ForumID int(12) NOT NULL auto_increment,
+        ForumName varchar(255) NOT NULL default '',
+        ParentForum int(12) default NULL,
+        ForumDesc varchar(255) default '',
+        weight tinyint(4) default '0',
+        Locked enum('0','1') NOT NULL default '0',
+        ThreadCount int(12) DEFAULT '0',
+        PostCount int(12) DEFAULT '0',
+        TotalThreadCount int(12) DEFAULT '0',
+        TotalPostCount int(12) DEFAULT '0',
+        PRIMARY KEY  (ForumID),
+        KEY ForumID (ForumID)
+      ) /*!40100 DEFAULT CHARACTER SET UTF8 */ ENGINE=MYISAM;");
+
+//    db_query("DROP TABLE IF EXISTS {f_groups}");
+      db_query("CREATE TABLE {f_groups} (
+        GroupID int(12) NOT NULL auto_increment,
+        GroupName varchar(90) NOT NULL default '',
+        GroupShortName varchar(90) NOT NULL default '',
+        PRIMARY KEY  (GroupID)
+      ) /*!40100 DEFAULT CHARACTER SET UTF8 */;");
+
+//    db_query("DROP TABLE IF EXISTS {f_groups_access}");
+      db_query("CREATE TABLE {f_groups_access} (
+        GroupsAccessID int(12) NOT NULL auto_increment,
+        GroupID int(12) NOT NULL default '0',
+        ForumID int(12) NOT NULL default '0',
+        PRIMARY KEY  (GroupsAccessID),
+        UNIQUE KEY GroupID (GroupID,ForumID)
+      ) /*!40100 DEFAULT CHARACTER SET UTF8 */ ENGINE=MYISAM;");
+
+//    db_query("DROP TABLE IF EXISTS {f_history}");
+      db_query("CREATE TABLE {f_history} (
+        uid int(10) NOT NULL default '0',
+        ThreadID int(10) NOT NULL default '0',
+        timestamp int(11) NOT NULL default '0',
+        PRIMARY KEY  (uid,ThreadID)
+      ) /*!40100 DEFAULT CHARACTER SET UTF8 */ ENGINE=MYISAM;");
+
+//    db_query("DROP TABLE IF EXISTS {f_posts}");
+      db_query("CREATE TABLE {f_posts} (
+                `PostID` int(12) NOT NULL auto_increment,
+                `PostTitle` varchar(255) default NULL,
+                `ThreadID` int(8) NOT NULL default '0',
+                `Poster` int(8) NOT NULL default '0',
+                `Posted` int(11) NOT NULL default '0',
+                `Content` text NOT NULL,
+                `AlwaysEdit` enum('0','1') NOT NULL default '0',
+                `Edit` int(11) NOT NULL default '0',
+                `Editor` int(8) default NULL,
+                `EditReason` varchar(255) default NULL,
+                PRIMARY KEY  (`PostID`),
+                KEY `ThreadID` (`ThreadID`),
+                KEY `Poster` (`Poster`),
+                KEY `Posted` (`Posted`),
+                FULLTEXT KEY `SearchFields` (`PostTitle`,`Content`)
+      ) /*!40100 DEFAULT CHARACTER SET UTF8 */ ENGINE=MYISAM;");
+
+
+//    db_query("DROP TABLE IF EXISTS {f_threads}");
+      db_query("CREATE TABLE {f_threads} (
+                `ThreadID` int(8) NOT NULL auto_increment,
+                `ThreadTitle` varchar(255) NOT NULL default '',
+                `Creator` int(8) NOT NULL default '0',
+                `Created` int(11) NOT NULL default '0',
+                `LastPoster` int(8) default NULL,
+                `LastPost` int(11) NOT NULL default '0',
+                `Locked` enum('0','1') NOT NULL default '0',
+                `Sticky` enum('0','1') NOT NULL default '0',
+                `ForumID` int(12) default '2',
+                `ViewCount` int(12) NOT NULL default '0',
+                `PostCount` int(12) default '0',
+                PRIMARY KEY  (`ThreadID`),
+                KEY `Creator` (`Creator`),
+                KEY `Created` (`Created`),
+                KEY `LastPost` (`LastPost`),
+                KEY `ForumIDLastPost` (`ForumID`,`LastPost`)
+      ) /*!40100 DEFAULT CHARACTER SET UTF8 */ ENGINE=MYISAM;");
+
+
+      db_query("INSERT INTO {f_forums} (ForumID, ForumName, ParentForum, ForumDesc, weight, Locked, ThreadCount, PostCount) VALUES (1,'Forums',NULL,'Forums', 0, '0', '0', '0')");
+      db_query("INSERT INTO {f_groups} (GroupID, GroupName, GroupShortName) VALUES (1,'access forum','forum_access')");
+      db_query("INSERT INTO {f_groups} (GroupID, GroupName, GroupShortName) VALUES (2,'post new threads/posts','forum_post')");
+      db_query("INSERT INTO {f_groups} (GroupID, GroupName, GroupShortName) VALUES (3,'administer forum','forum_administer')");
+      break;
+    }
+  }
+
+  function uieforum_update_1()
+  {
+    $irems = array();
+    $items[] = update_sql("ALTER TABLE {f_threads} ADD INDEX `ForumIDLastPost` (`ForumID`, `LastPost`)");
+    return $items;
+  }
+
+  function uieforum_update_2()
+  {
+    $items = array();
+    $items[] = update_sql("DROP TABLE IF EXISTS {F_Subs}");
+    $items[] = update_sql("ALTER TABLE {f_threads} ADD COLUMN `Created_drupal` int(11) NOT NULL default '0' AFTER Created, ADD COLUMN `LastPost_drupal` int(11) NOT NULL default '0' AFTER LastPost");
+    $items[] = update_sql("ALTER TABLE {f_threads} DROP INDEX `ForumIDLastPost`");
+    $items[] = update_sql("UPDATE {f_threads} SET `Created_drupal`=UNIX_TIMESTAMP(`Created`), `LastPost_drupal`=UNIX_TIMESTAMP(`LastPost`)");
+    $items[] = update_sql("ALTER TABLE {f_threads} DROP COLUMN `Created`, DROP COLUMN `LastPost`, CHANGE COLUMN `Created_drupal` `Created` int(11) NOT NULL default '0', CHANGE COLUMN `LastPost_drupal` `LastPost` int(11) NOT NULL default '0', ADD INDEX `Created` (`Created`), ADD INDEX `LastPost` (`LastPost`), ADD INDEX `ForumIDLastPost` (`ForumID`,`LastPost`)");
+    $items[] = update_sql("ALTER TABLE {f_posts} ADD COLUMN `Posted_drupal` int(11) NOT NULL default '0' AFTER `Posted`, ADD COLUMN `Edit_drupal` int(11) NOT NULL default '0' AFTER `Edit`");
+    $items[] = update_sql("UPDATE {f_posts} SET `Posted_drupal`=UNIX_TIMESTAMP(`Posted`), `Edit_drupal`=UNIX_TIMESTAMP(`Edit`)");
+    $items[] = update_sql("ALTER TABLE {f_posts} DROP COLUMN `Posted`, DROP COLUMN `Edit`, CHANGE COLUMN `Posted_drupal` `Posted` int(11) NOT NULL default '0', CHANGE COLUMN `Edit_drupal` `Edit` int(11) NOT NULL default '0', ADD INDEX `Posted` (`Posted`)");
+    return $items;
+  }
+
+  function uieforum_update_3()
+  {
+    $items = array();
+    $items[] = update_sql("ALTER TABLE {f_posts} ADD COLUMN `AlwaysEdit` enum('0','1') NOT NULL default '0' AFTER Content");
+    return $items;
+  }
+
+  function uieforum_update_4()
+  {
+    $items = array();
+    $items[] = update_sql("RENAME TABLE {F_Forums} TO {f_forums_temp}, {F_Groups} TO {f_groups_temp}, {F_Groups_Access} TO {f_groups_access_temp}, {F_History} TO {f_history_temp}, {F_Posts} TO {f_posts_temp}, {F_Threads} TO {f_threads_temp}");
+    $items[] = update_sql("RENAME TABLE {f_forums_temp} TO {f_forums}, {f_groups_temp} TO {f_groups}, {f_groups_access_temp} TO {f_groups_access}, {f_history_temp} TO {f_history}, {f_posts_temp} TO {f_posts}, {f_threads_temp} TO {f_threads}");
+    return $items;
+  }

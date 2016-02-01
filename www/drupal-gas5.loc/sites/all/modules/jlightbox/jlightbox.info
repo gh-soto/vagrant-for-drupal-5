@@ -1,0 +1,11 @@
+; $Id: jlightbox.info,v 1.1 2007/09/13 10:45:40 sun Exp $
+name = jLightbox
+description = Enables jQuery Lightbox for displaying images in front of the page content.
+dependencies = jquery_update
+package = User Interface
+
+; Information added by drupal.org packaging script on 2008-02-24
+version = "5.x-1.2"
+project = "jlightbox"
+datestamp = "1203835807"
+

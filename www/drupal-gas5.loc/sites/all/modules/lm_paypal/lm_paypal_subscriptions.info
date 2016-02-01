@@ -1,0 +1,11 @@
+; $Id: lm_paypal_subscriptions.info,v 1.25 2007/06/14 00:33:18 leemcl Exp $
+name = lm_paypal_subscriptions
+description = "Provides PayPal subscriptions to Drupal roles (requires lm_paypal)."
+package = "LM_PayPal"
+dependencies = lm_paypal
+
+; Information added by drupal.org packaging script on 2007-07-21
+version = "HEAD"
+project = "lm_paypal"
+datestamp = "1184976358"
+

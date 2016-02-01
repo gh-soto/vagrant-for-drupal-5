@@ -1,0 +1,11 @@
+; $Id: cck_extras.info,v 1.1.2.1 2007/02/25 07:56:43 eaton Exp $
+name = CCK Extras
+description = A set of add-on formatters and widgets for assorted CCK fields.
+dependencies = content
+package = CCK
+
+; Information added by drupal.org packaging script on 2007-11-23
+version = "5.x-1.x-dev"
+project = "cck_extras"
+datestamp = "1195776107"
+

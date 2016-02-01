@@ -1,0 +1,46 @@
+<?php
+// $Id: uc_paypal_buttons.install,v 1.1 2009/04/24 18:30:34 detour Exp $
+
+/**
+ * @file
+ * Installation routines for uc_paypal_buttons module
+ */
+
+/**
+ * Implementation of hook_install().
+ */
+function uc_paypal_buttons_install() {
+  switch ($GLOBALS['db_type']) {
+    case 'mysqli':
+    case 'mysql':
+      db_query("CREATE TABLE {uc_paypal_buttons} (
+        invoice_id int NOT NULL,
+        options text,
+        ipn text,
+        data text,
+        PRIMARY KEY (invoice_id)
+        ) /*!40100 DEFAULT CHARACTER SET UTF8*/");
+      break;
+
+    case 'pgsql':
+      db_query("CREATE TABLE {uc_paypal_buttons} (
+        invoice_id integer NOT NULL,
+        options text,
+        ipn text,
+        data text
+      )");
+      db_query("CREATE INDEX {uc_paypal_buttons}_invoice_id ON {uc_paypal_buttons} (invoice_id)");
+      break;
+
+    default:
+      drupal_set_message(t('Database %name is not supported.', array('%name', $GLOBALS['db_type'])), 'error');
+  }
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function uc_paypal_buttons_uninstall() {
+  db_query("DROP TABLE IF EXISTS {uc_paypal_buttons}");
+  variable_del('uc_paypal_buttons_products');
+}

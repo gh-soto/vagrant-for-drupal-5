@@ -1,0 +1,193 @@
+<?php
+// $Id: userpoints.install,v 1.2.2.7.2.13 2008/01/31 03:53:12 kbahey Exp $
+
+/**
+ * Install the initial schema.
+ */
+function userpoints_install() {
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+      db_query("CREATE TABLE {userpoints} (
+          uid           INT(10) NOT NULL DEFAULT '0',
+          points        INT(10) NOT NULL DEFAULT '0',
+          max_points    INT(10) NOT NULL DEFAULT '0',
+          last_update   INT(11) NOT NULL DEFAULT '0',
+          tid           INT(11) NOT NULL default '0',
+          pid           INT(11) NOT NULL auto_increment,
+          PRIMARY KEY (pid),
+          KEY (last_update)
+        ) /*!40100 DEFAULT CHARACTER SET utf8 */;");
+      db_query("CREATE TABLE {userpoints_txn} (
+          txn_id        INT     NOT NULL AUTO_INCREMENT,
+          uid           INT(10) NOT NULL DEFAULT '0',
+          approver_uid  INT(10) NOT NULL DEFAULT '0',
+          points        INT(10) NOT NULL DEFAULT '0',
+          time_stamp    INT(11) NOT NULL DEFAULT '0',
+          status        INT(1) NOT NULL DEFAULT '0',
+          description   TEXT,
+          reference     varchar(128),
+          expirydate    int(11) NULL default '0',
+          expired       tinyint (1) NOT NULL default '0',
+          parent_txn_id int(11) NOT NULL default '0',
+          tid           INT(11) NOT NULL default '0',
+          entity_id     INT(11) default NULL, 
+          entity_type   varchar(32) default NULL, 
+          operation         VARCHAR(32),
+          PRIMARY KEY (txn_id),
+          KEY (operation),
+          KEY (reference),
+          KEY (status)
+        ) /*!40100 DEFAULT CHARACTER SET utf8 */;");
+      break;
+
+    case 'pgsql':
+      db_query("CREATE TABLE {userpoints} (
+          uid           SERIAL,
+	        points        INTEGER NOT NULL default '0',
+	        max_points    INTEGER NOT NULL default '0',
+	        last_update   INTEGER NOT NULL default '0',
+	        PRIMARY KEY (uid)
+        );");
+      db_query("CREATE TABLE {userpoints_txn} (
+          txn_id        SERIAL,
+	        uid           INTEGER NOT NULL default '0',
+	        approver_uid  INTEGER NOT NULL default '0',
+	        points        INTEGER NOT NULL default '0',
+	        time_stamp    INTEGER NOT NULL default '0',
+	        status        INTEGER NOT NULL default '0',
+	        event         VARCHAR,
+	        description   VARCHAR,
+          expirydate    INTEGER NOT NULL default '0',
+          expired       BOOLEAN, 
+          parent_txn_id INTEGER NOT NULL default '0'
+	        PRIMARY KEY (txn_id)
+	      );");
+      break;
+  }
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function userpoints_uninstall() {
+
+  $vid = db_result(db_query("SELECT vid FROM {vocabulary} WHERE module='userpoints'"));
+  if ($vid) {
+    taxonomy_del_vocabulary($vid);
+  }
+
+  db_query('DROP TABLE {userpoints}');
+  db_query('DROP TABLE {userpoints_txn}');
+  db_query("DELETE FROM {variable} WHERE name like '%userpoints%'");
+}
+
+function userpoints_update_1() {
+  return _system_update_utf8(array('userpoints'));
+}
+
+function userpoints_update_2() {
+  $ret = array();
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+      // Add the max_points column
+      $ret[] = update_sql("ALTER TABLE {userpoints} ADD max_points INT(10) NOT NULL DEFAULT '0' AFTER points");
+      // Make the points column bigger
+      $ret[] = update_sql("ALTER TABLE {userpoints} CHANGE points points INT(10) NOT NULL DEFAULT '0'");
+      break;
+  }
+  return $ret;
+}
+
+function userpoints_update_3() {
+  $ret = array();
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+      // Add the description column
+      $ret[] = update_sql("ALTER TABLE {userpoints_txn} ADD description TEXT AFTER event");
+      break;
+  }
+  return $ret;
+}
+
+function userpoints_update_4() {
+  $ret = array();
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+      // Add the description column
+      $ret[] = update_sql("ALTER TABLE {userpoints_txn} CHANGE event event VARCHAR(32)");
+      $ret[] = update_sql("ALTER TABLE {userpoints_txn} CHANGE status status INTEGER NOT NULL DEFAULT '0' AFTER time_stamp");
+      break;
+  }
+  return $ret;
+}
+
+function userpoints_update_5() {
+  $ret = array();
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+      // Add the reference column and its index
+      $ret[] = update_sql("ALTER TABLE {userpoints_txn} ADD COLUMN reference VARCHAR(128) AFTER description");
+      $ret[] = update_sql("ALTER TABLE {userpoints_txn} ADD INDEX reference (reference )");
+      break;
+  }
+  return $ret;
+}
+
+function userpoints_update_6() {
+  $ret = array();
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+      $ret[] = update_sql("ALTER TABLE {userpoints_txn} 
+                         ADD expirydate INT(11) NOT NULL AFTER reference,
+                         ADD expired TINYINT(1) NOT NULL AFTER expirydate,
+                         ADD parent_txn_id INT NOT NULL AFTER expired,
+                         ADD tid INT NULL AFTER parent_txn_id
+                          ");
+      $ret[] = update_sql("ALTER TABLE {userpoints}
+                          DROP PRIMARY KEY
+                          ");
+      $ret[] = update_sql("ALTER TABLE {userpoints}
+                          ADD tid INT NULL AFTER last_update,
+                          ADD pid INT NOT NULL AUTO_INCREMENT PRIMARY KEY
+                          ");
+      break;
+  }
+  return $ret;
+}
+function userpoints_update_7() {
+  $ret = array();
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+      $ret[] = update_sql("ALTER TABLE {userpoints_txn} 
+                         ADD entity_id INT(11) NULL AFTER tid,
+                         ADD entity_type VARCHAR(32) NULL AFTER entity_id
+                          ");
+      $ret[] = update_sql("ALTER TABLE {userpoints_txn}
+			 CHANGE event operation VARCHAR(32) 
+                          ");
+      break;
+  }
+  return $ret;
+}
+function userpoints_update_8() {
+  $ret = array();
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+      $ret[] = update_sql("ALTER TABLE {userpoints_txn} 
+                         CHANGE tid tid INT(11) NOT NULL default '0'
+                          ");
+      $ret[] = update_sql("ALTER TABLE {userpoints} 
+                         CHANGE tid tid INT(11) NOT NULL default '0'
+                          ");
+      break;
+  }
+  return $ret;
+}

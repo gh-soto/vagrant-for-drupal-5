@@ -1,0 +1,996 @@
+<?php
+/* $Id: directory.module,v 1.11.2.29 2007/07/16 08:54:49 augustin Exp $ */
+/* Authored by Matt Westgate <drupal at asitis dot org> */
+/* Original Frontier implementation by John VanDyk <jvandyk at iastate dot edu> */
+/* Current maintainer Michael Curry, Exodus Development, Inc. http://exodusdev.com exodusdev@gmail.com */
+
+// Examples: 
+// http://amadorable.com/directory
+// http://www.ent.iastate.edu/list/
+
+define('DIRECTORY_MODULE_VERSION', '$Id: directory.module,v 1.11.2.29 2007/07/16 08:54:49 augustin Exp $');
+
+
+/********************************************************************
+ * Drupal Hooks :: General Overview
+ ********************************************************************/
+
+/**
+ * Implementation of hook_menu().
+ */
+function directory_menu($may_cache) {
+  $items = array();
+
+  if (!$may_cache) {
+    drupal_add_css(drupal_get_path('module', 'directory') .'/directory.css');
+  }
+
+  if ($may_cache) {
+    $items[] = array(
+      'path' => 'directory', 
+      'title' => t('directory'), 
+      'callback' => 'directory_page', 
+      'access' => user_access('access content')
+    );
+    $items[] = array(
+      'path' => 'directory/term', 
+      'title' => t('Advanced directory search'), 
+      'callback' => 'directory_term_page', 
+      'access' => user_access('access content'), 
+      'type' => MENU_CALLBACK
+    );
+    $items[] = array(
+      'path' => 'directory/random', 
+      'title' => t('Random directory link'), 
+      'callback' => 'directory_random', 
+      'access' => user_access('access content'), 
+      'type' => MENU_CALLBACK
+    );
+    $items[] = array(
+      'path' => 'admin/settings/directory',
+      'title' => t('Directory Settings'),
+      'description' => t('Set which node types and which vocabularies to include, the depth to display on the directory page, etc.'),
+      'callback' => 'drupal_get_form',
+      'callback arguments' => array('directory_admin_settings'),
+      'access' => user_access('administer site configuration'),
+      'type' => MENU_NORMAL_ITEM
+    );
+    $vocabularies = taxonomy_get_vocabularies();
+    foreach ($vocabularies AS $vid => $vocabulary) {
+      $items[] = array(
+        'path' => 'directory/vocabulary/'. $vid,
+        'title' => t('Directory for !vocabulary-name', array('!vocabulary-name' => $vocabulary->name)),
+        'callback' => 'directory_vocabulary_page',
+        'callback arguments' => $vid,
+        'access' => user_access('access content'),
+        'type' => MENU_SUGGESTED_ITEM,
+      );
+    }
+  }
+
+  return $items;
+}
+
+/********************************************************************
+ * Drupal Hooks :: Core Hooks
+ ********************************************************************/
+
+/**
+ * Implementation of hook_settings().
+ */
+function directory_admin_settings() {
+  $output = '';
+
+  if (function_exists('taxonomy_help')) {
+    $vocs[0] = '<'. t('none') .'>';
+    foreach (taxonomy_get_vocabularies() as $vid => $voc) {
+      $vocs[$vid] = $voc->name;
+    }
+  }
+
+  $nodetypes = array();
+  foreach (node_get_types() AS $type) {
+    $nodetypes[$type->type] = $type->name;
+  }
+
+  $form['module_banner'] = array(
+    '#type' => 'markup', 
+    '#value' => '<div style="border: solid 1px #eee; margin: .5em; padding: .5em;"> Module development sponsored by 
+      <ul>
+      <li><a href="http://exodusdev.com">Exodus Development</a></li>
+      <li><a href="http://activistsolutions.org/">Activist Solutions</a></li>
+      <li><a href="http://minguo.info/">minguo.info</a></li>
+      </ul>',
+  );
+  
+  $form['module_id'] = array(
+    '#type' => 'markup', 
+    '#value' =>  DIRECTORY_MODULE_VERSION .'<br/></div>',
+  );
+
+  $form['directory_no_nodes'] = array(
+  	'#type' => 'checkboxes',
+  	'#title' => t('<em><strong>Exclude</strong></em> these node types from directory pages'),
+  	'#default_value' => variable_get('directory_no_nodes', array()),
+  	'#options' => $nodetypes,
+  	'#description' => t('<em><strong>Please note:</strong> Any node types that are checked here will <strong>NOT be included</strong> in the directory listings.  All other types will be included.</em>'),
+  	'#required' => FALSE,
+  );
+  
+  $form['directory_vocabularies_root'] = array(
+  	'#type' => 'select',
+  	'#title' => t('Which vocabularies should be displayed on the directory main page'),
+  	'#default_value' => variable_get('directory_vocabularies_root', ''),
+  	'#options' => $vocs,
+  	'#description' => t('The vocabularies that will visible at the root level of the directory page.'),
+  	'#extra' => 0,
+  	'#multiple' => TRUE,
+  );
+
+  $form['directory_vocabularies_collapsed'] = array(
+  	'#type' => 'select',
+  	'#title' => t('Which vocabularies are collapsed by default?'),
+  	'#description' => t('The checked vocabularies will be collapsed by default if they are shown on the main directory page.'),
+  	'#options' => $vocs,
+  	'#default_value' => variable_get('directory_vocabularies_collapsed', array()),
+  	'#required' => FALSE,
+  	'#extra' => 0,
+  	'#multiple' => TRUE,
+  );
+  
+  $form['directory_show_child_counts'] = array(
+    '#type' => 'checkbox', 
+    '#title'=>t('Show count of nodes in categories'), 
+    '#default_value' => variable_get('directory_show_child_counts', TRUE), 
+    '#description' => t('Append a count of items contained in each term, if the count is greater than zero.'), 
+    '#required'=>FALSE,
+  );
+
+  $form['directory_hide_empty_terms'] = array(
+    '#type' => 'checkbox', 
+    '#title'=>t('Hide terms with no content'), 
+    '#default_value' => variable_get('directory_hide_empty_terms', FALSE), 
+    '#description' => t('If checked, hide taxonomy terms having no node content.'), 
+    '#required'=>FALSE,
+  );
+
+  $form['directory_help'] = array(
+  	'#type' => 'textarea',
+  	'#title' => t('Help text for the Directory home'),
+  	'#default_value' => variable_get('directory_help', ''),
+  	'#cols' => 70,
+  	'#rows' => 5,
+  	'#description' => t('This text will be displayed at the top of <strong>the main directory page</strong>.  It is useful for helping or instructing your users.'),
+  );
+
+  $form['directory_term_help'] = array(
+  	'#type' => 'textarea',
+  	'#title' => t('Help text for each Directory term page'),
+  	'#default_value' => variable_get('directory_term_help', ''),
+  	'#cols' => 70,
+  	'#rows' => 5,
+  	'#description' => t('This text will be displayed at the top of <strong>each directory term page</strong>.  It is useful for helping or instructing your users.'),
+  );
+
+  return system_settings_form($form);
+}
+
+/********************************************************************
+ * Module Specific :: Public Functions
+ ********************************************************************/
+
+/**
+ * This is the Controller for directory viewing.
+ */
+function directory_page($tid = null, $filter = null, $fid = null) {
+  $output = '';
+  if ($tid > 0) { //Display a category view
+    if ($help = variable_get('directory_term_help', '')) { 
+      $output = '<div class="directory-term-help">'. $help .'</div>';
+    }
+    directory_set_breadcrumb($tid, 'Home');
+    $content .= theme('directory_resource', $tid, $filter, $fid); // can return NULL if nothing available
+    if (!$content) {
+      $output .= t('<p class="directory-no-resources-available">There are no items in this category.  Please choose another.</p>');
+    } else {
+      $output .= $content;
+    }
+  }
+  elseif (preg_match('/^[a-zA-z]$/', $tid) || $tid == 'alpha' || $tid == '0-9') {
+    directory_set_breadcrumb($tid, 'Home');
+    $output .= theme('directory_resource',$tid, $filter, $fid);
+  }
+  elseif (!empty($tid)) {
+    drupal_goto('directory');
+  }
+  else { //Display the root
+    if ($help = variable_get('directory_help', '')) { 
+      $output = '<div class="directory-help">'. $help .'</div>';
+    }
+    $allowed_vids = variable_get('directory_vocabularies_root', array());
+    foreach (taxonomy_get_vocabularies() as $v) {
+      if (in_array($v->vid, $allowed_vids)) {
+        $output .= theme('directory_home_vocabulary', $v->vid);
+      }
+    }
+  }
+
+  return $output;
+}
+
+/**
+ * The controller for drilling into directories using multiple taxonomy term conditions.
+ *
+ * This functions the same as taxonomy_term_page, creating URLs like
+ *    directory/term/5,2,48
+ */
+
+function directory_term_page($str_tids = '', $depth = 0, $op = 'page') {
+
+  $output = '';
+  if (preg_match('/^([0-9]+[+ ])+[0-9]+$/', $str_tids)) {
+    $operator = 'or';
+    // The '+' character in a query string may be parsed as ' '.
+    $tids = preg_split('/[+ ]/', $str_tids);
+  }
+  else if (preg_match('/^([0-9]+,)*[0-9]+$/', $str_tids)) {
+    $operator = 'and';
+    $tids = explode(',', $str_tids);
+  }
+  else {
+    return drupal_not_found();
+  }
+
+  $tid_limit = 10;
+  $num_tids = count($tids);
+  if ($num_tids > $tid_limit) {
+    drupal_set_message(t('Please only chose up to %tid_limit categories. Your other category selections have been discarded.', array('%tid_limit' => $tid_limit)));
+    $tids = array_slice($tids, 0, $tid_limit);
+  }
+
+  // Build title:
+  if ($tids) {
+    $result = db_query('SELECT name FROM {term_data} WHERE tid IN (%s)', implode(',', $tids));
+    $names = array();
+    while ($term = db_fetch_object($result)) {
+      $names[] = $term->name;
+    }
+    $title = implode(" $operator ", $names);
+    drupal_set_title($title);
+  }
+
+  switch ($op) {
+    case 'page':
+      // Build breadcrumb based on first hierarchy of first term:
+      $current->tid = $tids[0];
+      $breadcrumbs = array(array('path' => $_GET['q']));
+      while ($parents = taxonomy_get_parents($current->tid)) {
+        $current = array_shift($parents);
+        $breadcrumbs[] = array('path' => 'directory/'. $current->tid, 'title' => $current->name);
+      }
+      $breadcrumbs = array_reverse($breadcrumbs);
+      menu_set_location($breadcrumbs);
+
+      $limit = 200;
+      $result = directory_select_nodes($tids, $operator, $depth, $limit);
+      $num_results = directory_select_count_nodes($tids, $operator, $depth, $limit);
+
+      if ($num_results == 0) {
+        drupal_set_message(t('No items match your criteria.'));
+      }
+      elseif (is_numeric($limit) && $num_results > $limit) {
+        drupal_set_message(t('Many results were found so you may want to refine your criteria. Showing the first %limit of %num_results resources.', array('%limit' => $limit, '%num_results' => $num_results)));
+      }
+
+      $output = '<h2 class="directory-category"><span>'. $title .'</span></h2>';
+      $output .= '<ul class="directory-resources">';
+      while ($node = db_fetch_object($result)) {
+        $node->taxonomy = taxonomy_node_get_terms($node->nid);
+        $output .= theme('directory_listing', $node);
+      }
+      $output .= '</ul>';
+
+      return $output;
+
+    default:
+      drupal_not_found();
+
+  }
+}
+
+/**
+ * Finds all nodes that match selected taxonomy conditions.
+ *
+ * @param $tids
+ *   An array of term IDs to match.
+ * @param $operator
+ *   How to interpret multiple IDs in the array. Can be "or" or "and".
+ * @param $depth
+ *   How many levels deep to traverse the taxonomy tree. Can be a nonnegative
+ *   integer or "all".
+ * @param $limit
+ *   The number of results to return.
+ * @return
+ *   A resource identifier pointing to the query results.
+ */
+function directory_select_nodes($tids = array(), $operator = 'or', $depth = 0, $limit = 15) {
+  $result = directory_select_nodes_query_builder($tids, $operator, $depth, $limit, 'fetch');
+  return $result;
+}
+
+function directory_select_count_nodes($tids = array(), $operator = 'or', $depth = 0, $limit = 15) {
+  return db_result(directory_select_nodes_query_builder($tids, $operator, $depth, $limit, 'count'));
+}
+
+/**
+ * Private function for directory_select_nodes and directory_select_count_nodes
+ */
+function directory_select_nodes_query_builder($tids = array(), $operator = 'or', $depth = 0, $limit = 15, $query_type = 'fetch') {
+  if (count($tids) > 0) {
+    // For each term ID, generate an array of descendant term IDs to the right depth.
+    $descendant_tids = array();
+    if ($depth === 'all') {
+      $depth = NULL;
+    }
+    foreach ($tids as $index => $tid) {
+      $term = taxonomy_get_term($tid);
+      $tree = taxonomy_get_tree($term->vid, $tid, -1, $depth);
+      $descendant_tids[] = array_merge(array($tid), array_map('_taxonomy_get_tid_from_term', $tree));
+    }
+
+    if ($operator == 'or') {
+      $str_tids = implode(',', call_user_func_array('array_merge', $descendant_tids));
+      $sql_fetch = db_rewrite_sql('SELECT DISTINCT(n.nid), n.* FROM {node} n INNER JOIN {term_node} tn ON n.nid = tn.nid WHERE tn.tid IN ('. $str_tids .') AND n.status = 1 ORDER BY n.sticky DESC, n.title ASC');
+      $sql_count = db_rewrite_sql('SELECT COUNT(DISTINCT(n.nid)) FROM {node} n INNER JOIN {term_node} tn ON n.nid = tn.nid WHERE tn.tid IN ('. $str_tids .') AND n.status = 1 ORDER BY n.sticky DESC, n.title ASC');
+    }
+    else {
+      $joins = '';
+      $wheres = '';
+      foreach ($descendant_tids as $index => $tids) {
+        $joins .= ' INNER JOIN {term_node} tn'. $index .' ON n.nid = tn'. $index .'.nid';
+        $wheres .= ' AND tn'. $index .'.tid IN ('. implode(',', $tids) .')';
+      }
+      $sql_fetch = db_rewrite_sql('SELECT DISTINCT(n.nid), n.* FROM {node} n '. $joins .' WHERE n.status = 1 '. $wheres .' ORDER BY n.sticky DESC, n.title ASC');
+      $sql_count = db_rewrite_sql('SELECT COUNT(DISTINCT(n.nid)) FROM {node} n '. $joins .' WHERE n.status = 1 '. $wheres .' ORDER BY n.sticky DESC, n.title ASC');
+    }
+
+    $sql    = ($query_type == 'count') ? $sql_count : $sql_fetch;
+    $result = (is_numeric($limit)) ? db_query_range($sql, 0, $limit) : db_query($sql);
+  }
+
+  return $result;
+}
+
+/**
+ * Load and goto a random directory link
+ */
+function directory_random() {
+  $nid = db_result(db_query('SELECT n.nid FROM {node} n WHERE n.status = 1 ORDER BY RAND() LIMIT 1'));
+  drupal_goto("node/$nid");
+}
+
+/********************************************************************
+ * Drupal Hooks :: Themeable Functions
+ ********************************************************************/
+
+/**
+ * @addtogroup themeable
+ * @{
+ */
+
+function theme_directory_listing($node) {
+  $node->teaser = ($node->teaser) ? "- $node->teaser" : $node->teaser;
+  return "<li>". l($node->title, "node/$node->nid"). $node->teaser . "</li>\n";
+}
+
+/** @} End of addtogroup themeable */
+
+/********************************************************************
+ * Module Specific :: Private Functions
+ ********************************************************************/
+
+/**
+ * Theme one section of the directory home page, corresponding to one vocabulary. 
+ * There will be as many sections as there are vocabularies displayed on the home page.
+ *
+ * @param $vid
+ *   integer: the vocabulary ID. 
+ *
+ * @param $collapse
+ *   boolean: say if the vocabulary should follow the collapsed setting.
+ *            if we are going to print only one vocabulary
+ *            it would be bad design to have it collapsed.
+ *
+ * @return $output
+ *   formatted html.
+ */
+function theme_directory_home_vocabulary($vid, $collapse = TRUE) {
+  $vocabulary = taxonomy_get_vocabulary($vid);
+  $terms = taxonomy_get_children(0, $vid);
+
+
+  $collapsed_vids = array();
+  if ($collapse) {
+    $collapsed_vids = variable_get('directory_vocabularies_collapsed', array()); 
+  }
+  
+  $collapsed_string = '';
+  if (in_array($vid, $collapsed_vids)) {
+    $collapsed_string = 'directory-home-vocabulary-collapsed';
+  }
+  drupal_add_js(drupal_get_path('module', 'directory') .'/directory.js');
+  drupal_add_js("var toggleT = ". drupal_to_js(t('show / hide')) .';', 'inline');
+  
+  $output = '<div class="directory-home-vocabulary '. $collapsed_string .' directory-home-vocabulary-collapsible" id="directory-vid-'. $vocabulary->vid .'">';
+  $output .= theme('directory_list_terms', $terms,  t('By %vocabulary-name', array('%vocabulary-name' => $vocabulary->name)));
+  $output .= '</div>';
+  
+  return $output;
+}
+
+/**
+ * Load all nodes found in a given tid
+ *
+ * We don't need static caching at this point since it is only called once per request.
+ */
+function directory_get_nodes_by_term($tid, $limit = NULL, $pager = FALSE) {
+  global $pager_count;
+  if (!is_numeric($pager_count)) $pager_count = 1;
+  $nodes = array();
+  $where = '';
+
+  $skip_type = variable_get('directory_no_nodes', '');
+  if (!empty($skip_type)) {
+    foreach ($skip_type as $type) {
+      $t[] = "'". db_escape_string($type) ."'";
+    }
+    $where = 'AND n.type NOT IN ('. implode(",", $t) .')';
+  }
+
+  if ($tid == 'alpha') {
+    $sql = db_rewrite_sql('SELECT n.nid FROM {node} n INNER JOIN {term_node} t ON t.nid = n.nid WHERE 1 '. $where .' AND n.status = 1 ORDER BY n.sticky DESC, n.changed DESC');
+  }
+  elseif ($tid == '0-9') {
+    $sql = db_rewrite_sql('SELECT n.nid FROM {node} n INNER JOIN {term_node} t ON t.nid = n.nid WHERE 1 '. $where ." AND n.status = 1 AND n.title REGEXP '^[0-9]' ORDER BY n.sticky DESC, n.changed DESC");
+  }
+  elseif (preg_match('/^[a-zA-z]$/', $tid)) {
+    $sql = db_rewrite_sql('SELECT n.nid FROM {node} n INNER JOIN {term_node} t ON t.nid = n.nid WHERE 1 '. $where ." AND n.status = 1 AND n.title LIKE '". db_escape_string($tid) ."%' ORDER BY n.sticky DESC, n.changed DESC");
+  }
+  else {
+    $sql = db_rewrite_sql('SELECT n.nid FROM {node} n INNER JOIN {term_node} t ON t.nid = n.nid WHERE 1 '. $where .' AND n.status = 1 AND t.tid = '. db_escape_string($tid) .' ORDER BY n.sticky DESC, n.changed DESC');
+  }
+  if ($pager) {
+    $result = pager_query($sql, $limit, $pager_count);
+    $pager_count++;
+  }
+  else {
+    $result = $limit ? db_query_range($sql, 0, $limit) : db_query($sql);
+  }
+
+  while ($data = db_fetch_object($result)) {
+      $nodes[$data->nid] = node_load($data->nid);
+    $nids[] = $data->nid;
+  }
+
+  /* Delete this if statement if using the above 'old way' */
+  /* A very quick way of gathering taxonomy terms for the collected nodes. */
+  if ($nids) {
+    $qqq='SELECT t.*, r.nid FROM {term_data} t, {term_node} r WHERE r.tid = t.tid AND r.nid IN ('. implode(', ', $nids) .') ORDER BY weight, name';
+    $result = db_query($qqq);
+    while ($t = db_fetch_object($result)) {
+      $nodes[$t->nid]->taxonomy[$t->tid] = $t;
+    }
+  }
+
+  return $nodes;
+}
+
+/**
+ * Display the nodes related to a term.
+ *   This function corresponds to the whole page, and will in turn call theme_directory_resource_section.
+ *
+ * @param $tid
+ *   An integer ($term->tid)
+ *   Or a string. See http://drupal.org/node/144743 and Alphabetical listing code block below.  
+ *
+ * @param $filter
+ *   either NULL or string 'vid'. If 'vid', terms will be filtered by that vid.
+ *   See http://drupal.org/node/144743.
+ *
+ * @param $fid
+ *   An integer corresponding to the vocabulary ID to filter by.  
+ *
+ * @return $output
+ *  formatted html. 
+ */
+function theme_directory_resource($tid, $filter = null, $fid = null) {
+  global $pager_total;
+  global $pager_count;
+  $num_results_per_page = 100;
+
+  /* Filters */
+  if ($filter == 'vid' && is_numeric($fid)) {
+    /* Set the page heading to the term that's being filtered. */
+    $term = taxonomy_get_term($tid);
+    $vocabulary = taxonomy_get_vocabulary($fid);
+    $title = "<h2>$term->name, by $vocabulary->name</h2>\n";
+    $nodes = directory_get_nodes_by_term($tid, $num_results_per_page, true);
+    /* This is a container for nodes with no term matching the filter. We create an 'Other' category out of this. */
+    $nodes_sans_terms = $nodes;
+    $taxonomy = taxonomy_get_tree($fid);
+    /* Iterate through the filter's terms and display resources that are linked to them */
+    foreach ($taxonomy as $term) {
+      $node_by_term = null;
+      foreach ($nodes as $nid => $node) {
+        if ($node->taxonomy[$term->tid]) {
+          $node_by_term[$nid] = $node;
+          unset($nodes_sans_terms[$nid]);
+        }
+      }
+      $output .= theme('directory_resource_section', $node_by_term, $term);
+    }
+
+    /* Create the fake 'Other' category */
+    $term->tid = -1;
+    $term->name = t('General');
+    $output .= theme('directory_resource_section', $nodes_sans_terms, $term);
+
+  }
+  // Alphabetical listing
+  elseif (preg_match('/^[a-zA-z]$/', $tid) || $tid == 'alpha' || $tid == '0-9') {
+    if ($nodes = directory_get_nodes_by_term($tid, $num_results_per_page, true)) {
+	$node = _first($nodes);
+	$term = $node->taxonomy[$tid]; // mjc: nodes array is indexed by nid, not 0-based
+      $output = directory_toolbar_alpha($tid);
+      $output .= theme('directory_resource_section', $nodes, $term);
+      if ($pager = theme('pager', NULL, $num_results_per_page, $pager_count - 1)) {
+        $output .= $pager;
+      }
+    }
+  } 
+  // Listing the nodes related to a single term. 
+  elseif (is_numeric($tid)) {
+    $output = theme('directory_resource_sub_section', $tid);
+    if ($nodes = directory_get_nodes_by_term($tid, $num_results_per_page, true)) {
+      $node = _first($nodes);
+	    $term = $node->taxonomy[$tid]; // MJC: was $nodes[0] which seems not to exist.. why? get_nodes_by_term uses nid as index into array!
+      $output .= theme('directory_resource_section', $nodes, $term);
+    }
+    else {
+      // FIXME: what is the use of this else{} block? We are returning $output, not $term!
+      $term = taxonomy_get_term($tid);
+    }
+  }
+
+  return $output;
+}
+
+/**
+ * Display a box with links to the sub-categories
+ * This function only displays the shell (title + <div> elements) where the links will be.
+ * It calls theme_directory_list_terms() which will print the content (list of links).
+ *
+ * @param $tid
+ *   The term ID whose sub-categories must be displayed.
+ *
+ * @return
+ *  formatted html 
+ */
+function theme_directory_resource_sub_section($tid) {
+  $output = '';
+
+  if ($terms = taxonomy_get_children($tid)) {
+    $output .= '<div class="directory-sub-categories">';
+    $output .= theme('directory_list_terms', $terms, t('Sub-categories'));
+    $output .= '</div>';
+  }
+
+  return $output;
+}
+
+/**
+ * Display a list of terms 
+ * Each list item is a link to its corresponding term page.
+ *
+ * @param $terms
+ *   An array of term objects.
+ *
+ * @param $title
+ *   Translated text.
+ *
+ // FIXME: $parent not needed ?? beginner.
+ * @param $parent
+ *   Display all the children whose parent tid is $parent.
+ *   If we are on the main page, $parent = 0 and all terms within the vocabulary are displayed.
+ *   If we are on a term page, $parent = $tid of that term and we display only the sub-terms.
+ *
+ * @return
+ *  formatted html 
+ */
+function theme_directory_list_terms($terms, $title = '', $parent = 0) {
+  $output = '';
+  $showcounts = variable_get('directory_show_child_counts', TRUE);
+  $hideempty = variable_get('directory_hide_empty_terms', FALSE);
+  
+  $item_span = '';
+   
+  // Build a list of categories (taxonomy terms) and child counts.
+  foreach ($terms as $term) {
+    $nodecount = array('count_own' => 0, 'count_children' => 0);
+    if ($showcounts || $hideempty) {
+      $nodecount = directory_taxonomy_term_count_nodes($term->tid);
+    }
+
+    $nodecount_span = '';
+    if ($showcounts) {
+      $item_span = '<span class="directory-category-nochildren">';
+      if ($nodecount['count_own'] || $nodecount['count_children']) {
+        $item_span = '<span class="directory-category-haschildren">';
+        $nodecount_span = theme('directory_node_count', $nodecount, $term);
+      }
+    }
+
+    // if desired, exclude items 
+    if ((!$hideempty) || ($nodecount['count_own'] || $nodecount['count_children'])) {
+      $children = taxonomy_get_children($term->tid);
+      if (is_array($children)) {
+        $children = theme('directory_list_subterms', $children);
+      }
+      $items[] = array('data' => $item_span . l($term->name, "directory/$term->tid", (($term->description) ? array('title' => $term->description) : array())) . $nodecount_span . '</span>', 'children' => $children);
+    }
+  }
+
+  $output = theme('item_list', $items, $title);
+  return $output;
+}
+
+/**
+ * Prints the number of nodes that belong to a term.
+ *
+ * @param $nodecount
+ *   array returned by directory_taxonomy_term_count_nodes($term->tid)
+ *
+ * @param $term
+ *   term object that may be needed by some themes.
+ *
+ * @return
+ *   either an empty string '' if there is nothing to display,
+ *   or formatted HTML. 
+ *
+ */
+function theme_directory_node_count($nodecount, $term) { 
+  $output = "<span class='directory-nodecount'> [". $nodecount['count_own'];
+  $output .= $nodecount['count_children'] ? ' + '. $nodecount['count_children'] .']</span>' : ']</span>';
+  return $output;
+}
+
+/**
+ * Recursively display the sub-terms within a themed list
+ *
+ * @param $terms
+ *   An array of term objects.
+ *
+ * @return
+ *   array of elements to put in the themed list. 
+ */
+function theme_directory_list_subterms($terms) { 
+  $showcounts = variable_get('directory_show_child_counts', TRUE);
+  $hideempty = variable_get('directory_hide_empty_terms', FALSE);
+  foreach ($terms as $term) {
+    $nodecount = 0;
+    if ($showcounts || $hideempty) {
+      $nodecount = directory_taxonomy_term_count_nodes($term->tid);
+    }
+    $nodecount_span = '';
+    if ($showcounts) {
+      $item_span = '<span class="directory-category-nochildren">';
+      if ($nodecount['count_own'] || $nodecount['count_children']) {
+        $item_span = '<span class="directory-category-haschildren">';
+        $nodecount_span = theme('directory_node_count', $nodecount, $term);
+      }
+    }
+    // if desired, exclude items 
+    if ((!$hideempty) || ($nodecount['count_own'] || $nodecount['count_children'])) {
+      $children = NULL;
+      if ($get_children = taxonomy_get_children($term->tid)) {
+        $children = theme('directory_list_subterms', $get_children);
+      }
+      
+      $items[] = array('data' => $item_span . l($term->name, "directory/$term->tid", (($term->description) ? array('title' => $term->description) : array())) . $nodecount_span . '</span>', 'children' => $children);
+    }
+  }
+  return $items;
+}
+
+/**
+ * Display a term with all the nodes that belong in it.
+ *
+ * @param $nodes
+ *   An array of nodes that belong to a given term (tid)
+ *
+ * @param $term
+ *   Object representing a taxonomy term.
+ *
+ * @param $limit
+ *   An integer used to only display n amount of resources instead of all resources for a category.
+ *
+ * @return
+ *   HTML
+ */
+function theme_directory_resource_section($nodes, $term, $limit = 0) {
+  $output = '';
+  if (!is_numeric($term->tid) || !$nodes) return NULL;
+
+  $output .= "<ul class=\"directory-resources\">\n";
+
+  foreach ($nodes as $nid => $node) {
+    $output .= theme('directory_listing', $node);
+  }
+
+  if ($limit) {
+    $num_nodes = directory_taxonomy_term_count_nodes($term->tid);
+    if ($num_nodes['count_own'] > $limit) {
+      $more = '<div class="directory-all-resources"><span class="directory-limit">'. t('%limit of %num_nodes showing in <span class="directory-term-name">"%term"</span>.', array('%limit' => $limit, '%num_nodes' => $num_nodes['count_own'], '%term' => $term->name)). '  '. l(t('View all items.'), "directory/$term->tid"). "</span></div>\n";
+    }
+  }
+  $output .= "</ul>\n$more";
+
+  return $output;
+}
+
+/**
+ * Set the title of a directory view as well as create the breadcrumb trail
+ * back to the directory root.
+ */
+function directory_set_breadcrumb($tid, $homepage_name = 'Home') {
+  $breadcrumb[] = l(t($homepage_name), '');
+  $breadcrumb[] = l(t('browse'), 'directory');
+
+  $taxonomy = array_reverse(taxonomy_get_parents_all($tid));
+  $term = array_pop($taxonomy);
+  $current_page = $term->name;
+  drupal_set_title($current_page);
+
+  foreach($taxonomy as $term) {
+    $breadcrumb[] = l($term->name, "directory/$term->tid");
+  }
+  if ($current_page) {
+    $breadcrumb[] = "<strong>$current_page</strong>";
+  }
+
+  drupal_set_breadcrumb($breadcrumb);
+}
+
+/**
+ * Return a navigaton toolbar for alphatical directory browsing.
+ */
+function directory_toolbar_alpha($current_letter) {
+  $letters = array('0-9', 'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O',
+                   'P','Q','R','S','T','U','V','W','X','Y','Z');
+  foreach ($letters as $letter) {
+    $items[] = l($letter, 'directory/'. strtolower($letter), (strtoupper($current_letter) == $letter ? array('class' => 'active') : array()));
+  }
+
+  return '<div class="directory-toolbar alpha">'. implode(' ', $items) .'</div>';
+}
+
+/**
+ * Create the filter links to sort a directory by another vocabulary.
+ */
+function directory_filters_toolbar($uri) {
+  $output = '';
+
+  $uri_array = explode('/', $uri);
+  foreach ($uri_array as $key => $part) {
+    if ($part == 'directory' || $part == 'eiir_search' && is_numeric($uri_array[$key + 1])) {
+      $tid = $uri_array[$key + 1];
+      $clean_uri = $part .'/'. $tid;
+      $current_filter = trim(str_replace($clean_uri, '', $uri), '/');
+    }
+  }
+
+  if ($clean_uri && $tid) {
+    foreach (taxonomy_get_vocabularies() as $v) {
+      $valid_filters[$v->name] = "vid/$v->vid";
+    }
+
+    $vid = db_result(db_query('SELECT vid FROM {term_data} WHERE tid = %d', $tid));
+    $hide_filter    = "vid/$vid";
+    $current_filter = (!$current_filter) ? 'alpha' : $current_filter;
+
+    $output = '<div class="directory-filter-wrapper">'. t('Sort by:<br />');
+    foreach ($valid_filters as $name => $filter_params_as_uri) {
+      if ($hide_filter != $filter_params_as_uri) {
+        if (strstr($current_filter, $filter_params_as_uri)) {
+          $links[] = '<input type="radio" name="sorted" checked="checked" /> '. t("<strong>$name</strong>");
+        }
+        else {
+          $new_uri = $clean_uri;
+          if ($filter_params_as_uri != 'alpha') {
+            $new_uri .= '/'. $filter_params_as_uri;
+          }
+
+          $url = url($new_uri);
+          $links[] = '<input type="radio" name="sorted" onClick="javascript:void(window.location.href = \''. $url .'\')" /> '. l($name, $url);
+        }
+      }
+    }
+    $output .= implode('<br />', $links). '</div>';
+  }
+
+  return $output;
+}
+
+/**
+ * Format a summary of the current pager position, such as "6 through 10 of 52".
+ *
+ * @param $limit
+ *   The number of query results to display per page.
+ * @param $element
+ *   An optional integer to distinguish between multiple pagers on one page.
+ * @param $format
+ *   A printf-style format string for customizing the pager text.
+ * @return
+ *   An HTML string that generates this piece of the query pager.
+ *
+ * @ingroup themeable
+ */
+function theme_directory_pager_detail($limit, $element = 0, $format = '%d through %d of %d.') {
+  global $pager_from_array, $pager_total;
+
+  $output = '<div class="pager-detail">';
+  if ($pager_total[$element] > (int)$pager_from_array[$element] + 1) {
+    $output .= sprintf($format, (int)$pager_from_array[$element] + 1, ((int)$pager_from_array[$element] + $limit <= $pager_total[$element] ? (int)$pager_from_array[$element] + $limit : $pager_total[$element]), $pager_total[$element]);
+  }
+  $output .= '</div>';
+
+  return $output;
+}
+
+/**
+ * Get the first element of an array
+ */
+function &_first(&$array) {
+  if (!is_array($array))
+    return null;
+  if (!count($array))
+    return false; // like reset()
+  reset($array);
+  return $array[key($array)];
+}
+
+/**
+ * Get last element of an array
+ */
+function &_last(&$array) {
+  if (!is_array($array))
+    return null;
+  if (!count($array))
+    return false; // like end()
+  end($array);
+  return $array[key($array)];
+}
+
+/**
+ * This is a replacement function for taxonomy_term_count_nodes.
+ * See: http://drupal.org/node/144969 (drupal issue)
+ * and: http://drupal.org/node/145023 (directory issue).
+ * 
+ * Count the number of published nodes classified by a term.
+ *
+ * @param $tid
+ *   The term's ID
+ *
+ * @param $type
+ *   The $node->type. If given, taxonomy_term_count_nodes only counts
+ *   nodes of $type that are classified with the term $tid.
+ *
+ * @param $save_to_db
+ *   This function is recursive, and we don't need to save the result in the DB at each iteration.
+ *   $save_to_db is set to FALSE at each nested call, so that the actual saving to DB can happen only
+ *   when the function exits the last time.
+ *
+ * @return $array
+ *   where: 
+ *     $array['count_own'] being the number of nodes within the term proper.
+ *     $array['count_children'] being the number of nodes in children terms, not counting those which are already counted in the parent term.
+ *     $array['own_nodes'] array of nid's within this $tid.
+ *     $array['children_nodes'] array of all the descendent nid's from children terms, not including those already set as one's own.
+ *
+ *   Results are statically cached.
+ * Also, in order to improve performance accross requests, we cache the serialized array on database, in {cache_page} (this table is flushed each time a node or a taxonomy item is added/updated/deleted).
+ */
+function directory_taxonomy_term_count_nodes($tid, $type = 0, $save_to_db = TRUE) {
+  static $count = array();
+  $modified = FALSE; // We keep track of modification of $count, to check whether we need to save it to DB.
+
+  if (empty($count)) {
+    $count = cache_get('taxonomy_term_count_nodes', 'cache_page');
+    $count = unserialize($count->data);
+  }
+  
+  if (!isset($count[$type])) {
+    $modified = TRUE;
+    $count[$type] = array();
+    // In the queries below, we cannot use 'SELECT t.tid, COUNT(n.nid) AS c FROM ...'
+    // because a node may be assigned more than one term and be counted more than once. 
+    // We therefore take note of the nid's and count the number of items in the $count array, 
+    // making sure there is no duplicate.
+
+    // $type == 0 always evaluates TRUE if $type is a string
+    if (is_numeric($type)) {
+      $result = db_query(db_rewrite_sql('SELECT t.tid, n.nid FROM {term_node} t JOIN {node} n ON t.nid = n.nid WHERE n.status = 1', 't', 'tid'));
+    }
+    else {
+      $result = db_query(db_rewrite_sql("SELECT t.tid, n.nid FROM {term_node} t JOIN {node} n ON t.nid = n.nid WHERE n.status = 1 AND n.type = '%s'", 't', 'tid'), $type);
+    }
+    while ($item = db_fetch_object($result)) {
+      if (!isset($count[$type][$item->tid])) {
+        $count[$type][$item->tid] = array('own_nodes' => array());
+      }
+      $count[$type][$item->tid]['own_nodes'][$item->nid] = 1;  
+    }
+  }
+
+  if (!isset($count[$type][$tid]['count_own'])) {
+    $modified = TRUE;
+    $count[$type][$tid]['count_own'] = count($count[$type][$tid]['own_nodes']);
+    $count[$type][$tid]['count_children'] = 0;
+    $count[$type][$tid]['children_nodes'] = array();
+    foreach (_taxonomy_term_children($tid) as $c) {
+      if ($children = directory_taxonomy_term_count_nodes($c, $type, FALSE)) { // FALSE: we do not need to save $count in the db at this iteration.
+        // Add the children's own nodes:
+        if (is_array($children['own_nodes'])) {
+          foreach ($children['own_nodes'] AS $child_nid => $n) {
+            if (!isset($count[$type][$tid]['own_nodes'][$child_nid])) { // make sure the nid is not already counted for the parent.
+              $count[$type][$tid]['children_nodes'][$child_nid] = 1;
+            }
+          }
+        }
+        // Add the nodes of the children's children.
+        if (is_array($children['children_nodes'])) {
+          foreach ($children['children_nodes'] AS $child_nid => $n) {
+            if (!isset($count[$type][$tid]['own_nodes'][$child_nid])) { // make sure the nid is not already counted for the parent.
+              $count[$type][$tid]['children_nodes'][$child_nid] = 1;
+            }
+          }
+        }
+      }
+    }
+    $count[$type][$tid]['count_children'] = count($count[$type][$tid]['children_nodes']);
+  }
+
+  if ($modified && $save_to_db) {
+    $cache = serialize($count);
+    // the cached data will be used for at least one hour before being flushed.
+    // TODO, make the nb of seconds before this cache is cleared configurable: time() + variable_get();
+    cache_set('taxonomy_term_count_nodes', 'cache_page', $cache, time() + 60 * 60);
+  }
+
+  return $count[$type][$tid];
+}
+ 
+/**
+ * Menu callback for directory/vocabulary.
+ *
+ * @param $vid
+ *   the vocabulary ID. 
+ */
+function directory_vocabulary_page($vid = '') {
+  $output = '';
+  
+  // If we don't have a real vocabulary ID, redirect to the main directory page. 
+  if (empty($vid) || !is_numeric($vid)) {
+    drupal_goto('directory');
+  }
+  else {
+    $vocabulary = taxonomy_get_vocabulary($vid);
+    if (!$vocabulary) {
+      drupal_goto('directory');
+    }
+    drupal_set_title(t("Directory for @vocabulary", array('@vocabulary' => $vocabulary->name)));
+    $output .= theme_directory_home_vocabulary($vid, FALSE);
+  }
+  return $output;
+}
+ 

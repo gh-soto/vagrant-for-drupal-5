@@ -1,0 +1,9 @@
+; $Id: question.info,v 1.1.2.1.2.2 2007/06/18 23:06:59 dww Exp $
+name = Question
+description = Allows users to ask questions to be answered by site authors.
+
+; Information added by drupal.org packaging script on 2007-10-20
+version = "5.x-1.4"
+project = "question"
+datestamp = "1192840506"
+

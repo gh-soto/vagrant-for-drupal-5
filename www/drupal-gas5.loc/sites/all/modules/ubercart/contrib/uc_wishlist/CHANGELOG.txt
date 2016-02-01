@@ -1,0 +1,46 @@
+CHANGELOG for uc_wishlist module
+
+version 0.6 (03/18/2008)
+-- improved 'add to cart' buttons on wish list to add item even if quantity
+ has not been set (it defaults to 1)
+-- added redirection back to page where user is prompted to login or register
+-- added 'create or manage my wish list' link to search page
+-- fixed error causing message about items from multiple wish lists
+-- fixed bug that caused wish list items to not include shippable parameter
+  [any items added to a wish list before this fix will not be marked as
+  shippable. so you have to disable 'Hide shipping information when possible
+  for carts with no shippable items.' in the checkout settings.]
+-- added CSS file for custom styles on wish list search page
+-- changed uc_wishlist_remove_item to depend on wpid argument alone
+
+version 0.5 (01/23/2008)
+-- removed footer/summary row from wish list
+-- improved search code for finding wish lists based on user name
+-- added button for adding each item on a wish list to the cart
+-- added more notifications for saving and completing wish lists
+-- added settings: default wish list title, and whether to allow anonymous
+ users to create wish lists
+-- added admin settings and manage page (to view/delete wish lists)
+-- fixed error caused in search settings [thanks to KillerJerseys]
+-- fixed block setting for hiding block if empty [thanks to KillerJerseys]
+
+version 0.4 (01/13/2008)
+-- added support for finding wish lists through drupal search
+ (using hook_search) [patch from jrust]
+-- added notice to anonymous users for saving wish list [patch from jrust]
+-- wish list data deleted when user is deleted [patch from jrust]
+-- fixed product images on wish list [patch from jrust]
+-- added uninstall support
+-- changed module package to 'Ubercart - extra'
+
+version 0.3 (10/24/2007)
+-- added CHANGELOG.txt LICENSE.txt and README.TXT
+-- return wish lists for user profile only (through uc_wishlist_user hook)
+  only if the user has at least one wish list
+
+version 0.2 (10/18/2007)
+-- replaced patch for uc_cart with form_alter hook on uc_cart_checkout_form
+
+version 0.1 (10/18/2007)
+-- initial release of uc_wishlist
+

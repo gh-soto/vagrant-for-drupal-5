@@ -1,0 +1,65 @@
+<?php
+// $Id $
+
+function views_bonus_export_views_style_plugins() {
+  return array(
+    'views_csv' => array(
+      'name' => t('Views Bonus: CSV file'),
+      'theme' => 'views_bonus_export_csv',
+      'needs_table_header' => true,
+      'needs_fields' => true,
+      'even_empty' => true,
+    ),
+    'views_doc' => array(
+      'name' => t('Views Export: Doc file'),
+      'theme' => 'views_bonus_export_doc',
+      'needs_table_header' => true,
+      'needs_fields' => true,
+      'even_empty' => true,
+    ),
+  );
+}
+
+function theme_views_bonus_export_csv($view, $nodes, $type) {
+  $fields = _views_get_fields();
+  
+  // headings row
+  $headings = array();
+  foreach ($view->field as $field) {
+    if ($fields[$field['id']]['visible'] !== false) {
+      $headings[] = $field['label'] ? $field['label'] : $fields[$field['fullname']]['name'];
+    }
+  }
+  $output .= implode(',', $headings) . "\r\n";
+
+  // one row for each node
+  foreach ($nodes as $node) {
+    $values = array();
+    foreach ($view->field as $field) {
+      if ($fields[$field['id']]['visible'] !== false) {
+        $value = $field;
+        $value = views_theme_field('views_handle_field', $field['queryname'], $fields, $field, $node, $view);
+        $value = preg_replace('/<.*?>/', '', $value); // strip html tags
+        $value = str_replace('"', '""', $value); // escape " characters
+        $value = decode_entities($value);
+        $values[] = '"' . $value . '"';
+      }
+    }
+    $output .= implode(',', $values) . "\r\n";
+  }
+  drupal_set_header('Content-Type: text/x-comma-separated-values');
+  print $output;
+  module_invoke_all('exit');
+  exit;
+}
+
+function theme_views_bonus_export_doc($view, $nodes) {
+  drupal_set_header('Content-Type: application/msword');
+  $table = theme('views_view_table', $view, $nodes, null);
+  $table = preg_replace('/<\/?(a|span) ?.*?>/', '', $table); // strip 'a' and 'span' tags
+  print $table;
+  module_invoke_all('exit');
+  exit;
+}
+
+

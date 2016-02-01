@@ -1,0 +1,23 @@
+<?php
+
+//$admanager_head = '
+//<script language="JavaScript" src="http://partner.googleadservices.com/gampad/google_service.js">
+//</script>
+//<script language="JavaScript">
+//  GS_googleAddAdSenseService("ca-pub-3696477789128259");
+//  GS_googleEnableAllServices();
+//</script>
+//<script language="JavaScript">
+//  GA_googleAddSlot("ca-pub-3696477789128259", "GAS_160x600_ROS");
+//  GA_googleAddSlot("ca-pub-3696477789128259", "GAS_300x250_ROS");
+//   GA_googleAddSlot("ca-pub-3696477789128259", "GAS_300x250_ROS_2");
+//  GA_googleAddSlot("ca-pub-3696477789128259", "GAS_728x90_ROS");
+//  GA_googleAddSlot("ca-pub-3696477789128259", "GAS_728x90_ROS_2");
+//  GA_googleAddSlot("ca-pub-3696477789128259", "GAS_468x60_ROS");
+//</script>
+//<script language="JavaScript">
+//  GA_googleFetchAds();
+//</script>
+//';
+
+//drupal_set_html_head($admanager_head);

@@ -1,0 +1,269 @@
+# $Id: general.pot,v 1.1.2.1 2008/11/07 13:04:58 francoud Exp $
+#
+# LANGUAGE translation of Drupal (general)
+# Copyright YEAR NAME <EMAIL@ADDRESS>
+# Generated from files:
+#  join_role_with_password.module,v 1.0.0.1 2008/11/03 12:20:00 francoud
+#  join_role_with_password.info,v 1.0.0.0 2008/10/2 00:09:00 francoud
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"POT-Creation-Date: 2008-11-03 12:49+0100\n"
+"PO-Revision-Date: YYYY-mm-DD HH:MM+ZZZZ\n"
+"Last-Translator: NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <EMAIL@ADDRESS>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+
+#: join_role_with_password.module:25;26
+msgid "Manage role passwords"
+msgstr ""
+
+#: join_role_with_password.module:34
+msgid "Add role password"
+msgstr ""
+
+#: join_role_with_password.module:44
+msgid "Remove role passwords"
+msgstr ""
+
+#: join_role_with_password.module:54
+msgid "Change role passwords"
+msgstr ""
+
+#: join_role_with_password.module:66
+msgid "Join or leave a role"
+msgstr ""
+
+#: join_role_with_password.module:67
+msgid "Join a role with a password, or leave it"
+msgstr ""
+
+#: join_role_with_password.module:88
+msgid "Add password to an existing role"
+msgstr ""
+
+#: join_role_with_password.module:101;232;360;477;506;680;711;825
+msgid "Error from the query!"
+msgstr ""
+
+#: join_role_with_password.module:105
+msgid "There is no role you can add a password!"
+msgstr ""
+
+#: join_role_with_password.module:127
+msgid "Add a password to this role"
+msgstr ""
+
+#: join_role_with_password.module:129
+msgid "Authorized users will be able to join this role using a password"
+msgstr ""
+
+#: join_role_with_password.module:135;576
+msgid "Insert a password"
+msgstr ""
+
+#: join_role_with_password.module:136;148
+msgid "Give a password to this role"
+msgstr ""
+
+#: join_role_with_password.module:141
+msgid "Repeat the password"
+msgstr ""
+
+#: join_role_with_password.module:142
+msgid "Repeat the password again"
+msgstr ""
+
+#: join_role_with_password.module:169;444
+msgid "Passwords mismatch"
+msgstr ""
+
+#: join_role_with_password.module:173;448
+msgid "Invalid password"
+msgstr ""
+
+#: join_role_with_password.module:195
+msgid "Password added to role: %role"
+msgstr ""
+
+#: join_role_with_password.module:198;283;325;484;498;636
+msgid "Access denied"
+msgstr ""
+
+#: join_role_with_password.module:215
+msgid "Remove password from a role"
+msgstr ""
+
+#: join_role_with_password.module:235;363;509
+msgid "List of roles with password is empty!"
+msgstr ""
+
+#: join_role_with_password.module:250;268
+msgid "Remove password from this role"
+msgstr ""
+
+#: join_role_with_password.module:252
+msgid "If you remove password from a role, users will be no more able to join it using a password"
+msgstr ""
+
+#: join_role_with_password.module:266
+msgid "Remove role password"
+msgstr ""
+
+#: join_role_with_password.module:267;419
+msgid "This action cannot be undone."
+msgstr ""
+
+#: join_role_with_password.module:268;420
+msgid "Cancel"
+msgstr ""
+
+#: join_role_with_password.module:290;669
+msgid "Invalid role id"
+msgstr ""
+
+#: join_role_with_password.module:296
+msgid "Severe error: role is not in the table"
+msgstr ""
+
+#: join_role_with_password.module:318
+msgid "Removed password from role: %role"
+msgstr ""
+
+#: join_role_with_password.module:321
+msgid "Error from query!"
+msgstr ""
+
+#: join_role_with_password.module:343
+msgid "Change password for a role"
+msgstr ""
+
+#: join_role_with_password.module:378;420
+msgid "Change password to this role"
+msgstr ""
+
+#: join_role_with_password.module:380
+msgid "Choose what role to change the password"
+msgstr ""
+
+#: join_role_with_password.module:395
+msgid "New password"
+msgstr ""
+
+#: join_role_with_password.module:397
+msgid "You may enter a new password for this role"
+msgstr ""
+
+#: join_role_with_password.module:401
+msgid "New password again"
+msgstr ""
+
+#: join_role_with_password.module:403
+msgid "Enter new password again"
+msgstr ""
+
+#: join_role_with_password.module:418
+msgid "Change role password"
+msgstr ""
+
+#: join_role_with_password.module:480
+msgid "Role %role updated - password changed!"
+msgstr ""
+
+#: join_role_with_password.module:555
+msgid "Join a role"
+msgstr ""
+
+#: join_role_with_password.module:562
+msgid "Join this role"
+msgstr ""
+
+#: join_role_with_password.module:564
+msgid "You can join one of these roles if u know the correct password"
+msgstr ""
+
+#: join_role_with_password.module:577
+msgid "Enter the correct password to join this role"
+msgstr ""
+
+#: join_role_with_password.module:581
+msgid "Leave a role"
+msgstr ""
+
+#: join_role_with_password.module:588
+msgid "Leave this role"
+msgstr ""
+
+#: join_role_with_password.module:590
+msgid "You can leave one of this roles; you dont need to know the password to leave it"
+msgstr ""
+
+#: join_role_with_password.module:610
+msgid "Do it now"
+msgstr ""
+
+#: join_role_with_password.module:652
+msgid "Missing password"
+msgstr ""
+
+#: join_role_with_password.module:657
+msgid "Malformed password"
+msgstr ""
+
+#: join_role_with_password.module:662;703
+msgid "Sorry, that role does no more exists"
+msgstr ""
+
+#: join_role_with_password.module:683
+msgid "You have joined the role: %role_name "
+msgstr ""
+
+#: join_role_with_password.module:687
+msgid "Invalid password for role: %role_name"
+msgstr ""
+
+#: join_role_with_password.module:714
+msgid "You have left role: %role"
+msgstr ""
+
+#: join_role_with_password.module:735;764
+msgid "Invalid call - $role_id does not exist"
+msgstr ""
+
+#: join_role_with_password.module:794
+msgid "Password too short"
+msgstr ""
+
+#: join_role_with_password.module:799
+msgid "Password is blank or empty"
+msgstr ""
+
+#: join_role_with_password.module:842
+msgid "Database cleanup: role %removed has been removed."
+msgstr ""
+
+#: join_role_with_password.module:13
+msgid "administer join_role_with_password"
+msgstr ""
+
+#: join_role_with_password.module:13
+msgid "May join new role"
+msgstr ""
+
+#: join_role_with_password.module:0 join_role_with_password.info:0
+msgid "join_role_with_password"
+msgstr ""
+
+#: join_role_with_password.info:0
+msgid "Allows users to join a given role using  a given password."
+msgstr ""
+
+#: join_role_with_password.info:0
+msgid "user"
+msgstr ""
+

@@ -1,0 +1,77 @@
+January 17, 2007
+ - taxonomy_image.module:
+    o updated to work with with Drupal 5.0
+       (thanks to William OConnor, aka csevb10, for the patch)
+ - taxonomy_image.install:
+    o updated to work with with Drupal 5.0
+       (thanks to William OConnor, aka csevb10, for the patch)
+ - taxonomy_image.info
+    o new file to support Drupal 5.0
+       (thanks to William OConnor, aka csevb10, for the patch)
+
+June 27, 2006
+ - taxonomy_image.install:
+    o replace taxonomy_image.mysql
+      (thanks to Webchick for the patch)
+
+April 26, 2006
+ - taxonomy_image.module:
+    o updated to work with Drupal 4.7
+      (thanks to Webchick for the patch)
+
+August 28, 2005
+ - taxonomy_image.module:
+    o include alt tag which is the name of the taxonomy term
+
+October 27, 2004
+ - taxonomy_image.module: 
+    o feature request #12206:  added static variable to cache database lookups
+      when displaying taxonomy images
+
+September 30, 2004 (Jeremy Andrews)
+ - taxonomy_image.module: updated to work with Drupal 4.5-rc
+    o update _menu hook to support caching
+    o FILE_SEPARATOR static no longer defined, use '/' (per user.module)
+    o don't print header in image admin page to match other taxonomy pages
+
+August 18, 2004 (Jeremy Andrews)
+ - taxonomy_image.module: updated to work with Drupal 4.5
+    o remove unused _link hook
+    o add new _menu hook (adds 'images' tab under 'categories')
+    o update help text to reflect new paths, add inline help
+    o auto-create image subdirectory if it doesn't exist
+    o 'edit image' now uses 'edit' in path, 'upload image' still uses 'add'
+    o get file path from $file->filepath instead of old $file->path
+ - README, INSTALL:
+    o updated to reflect these changes
+
+June 1, 2004 (Jeremy Andrews)
+ - taxonomy_image.module
+    o added support for private images
+    o refers to images as pictures, to standardize with avatar support
+    o stores images in configurable files/ subdirectory
+    o display proper titles depending on the link clicked
+
+May 31, 2004 (Jeremy Andrews)
+ - taxonomy_image.module
+    o added ability to scale images, retaining the aspect ratio
+      (based on a patch by John Vandenberg)
+
+May 29, 2004 (Jeremy Andrews)
+ - taxonomy_image.module
+    o added help text
+    o allow administrators to force image height and/or width
+    o display term name in image upload form
+
+May 28, 2004 (Jeremy Andrews)
+ - taxonomy_image.module:
+    o new configuration option for recursively matching images
+    o updated taxonomy_image_display() to provide recursive image matching
+      (when enabled)
+
+May 27, 2004 (Jeremy Andrews)
+ - taxonomy_image.module:
+    o Initial writing.  Defined schema, provide interface for associating
+      images with terms.  Provided function for displaying image.
+ - taxonomy_image.mysql:
+    o Defined schema.  Uses one small table: 'term_image'.

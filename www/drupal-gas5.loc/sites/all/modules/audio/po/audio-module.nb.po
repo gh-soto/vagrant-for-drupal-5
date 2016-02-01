@@ -1,0 +1,431 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: audio-module\n"
+"POT-Creation-Date: \n"
+"PO-Revision-Date: 2007-07-31 19:06+0100\n"
+"Last-Translator: Sten Johnsen <sten@bedre-bilder.no>\n"
+"Language-Team: THINEA Webteknologi <sten@thinea.no>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Poedit-Language: Norwegian Bokmal\n"
+"X-Poedit-Country: NORWAY\n"
+
+#: audio.module:16
+msgid "You can browse for audio by any of the following fields."
+msgstr "Du kan liste lyd etter hvilken som helst av de følgende feltene."
+
+#: audio.module:18
+msgid "The audio module allows users to upload and store audio files on a Drupal site. Audio is an important medium for community communication as the recent rise of the <a href=\"!elink-en-wikipedia-org\">podcast phenomenon</a> demonstrates."
+msgstr "Lydmodulen gjør at brukere kan laste opp og lagre lydfiler på et Drupal nettsted. Lyd er et viktig medium for nettstedets kommunikasjonsstrategi slik som utviklingen av <a href=\"!elink-en-wikipedia-org\">podcast fenomenet</a> demonstrerer."
+
+#: audio.module:19
+msgid "Users create audio nodes by uploading a file from their computer. They are then able to make changes to the metadata, perhaps adding an artist, or removing the track number. Visitors can download the audio file, view the file's metadata and encoding information, or browse for audio by metadata (artist, title, year, etc). Visitors can even play MP3s within their browser using the <a href=\"!elink-musicplayer-sourceforge-net\">XSPF flash player</a> that is bundled with the module."
+msgstr "Brukere lager lydnoder ved å laste opp en fil fra deres datamaskin. De kan så endre metadata, f.eks legge til en artist eller fjerne et spor nummer. Besøkende kan laste ned lydfilen, se filens metadata og kodingsinformasjon eller liste lyd etter metadata (artist, tittel, år, etc.). Besøkende kan til og med spille av MP3 med sin egen nettleser ved hjelp av <a href=\"!elink-musicplayer-sourceforge-net\">XSPF flash player</a> som er med som en del av pakken i denne modulen."
+
+#: audio.module:20
+msgid "The module uses the <a href=\"!elink-www-getid3-org\">getID3 library</a> to read and write <a href=\"%elink-en-wikipedia-org\">ID3 tag</a> information from the audio file. getID3 can read metadata from a many different audio and video formats giving the audio module a great deal of flexibility."
+msgstr "Denne modulen benytter <a href=\"!elink-www-getid3-org\">getID3 biblioteket</a> for å lese og skrive <a href=\"!elink-en-wikipedia-org\">ID3 tag</a> informasjon fra lydfilen. getID3 kan lese metadata fra mange forskjellige lyd og videoformater slik at lydmodulen blir svært fleksibel."
+
+#: audio.module:21
+msgid ""
+"<p>You can:</p>\r\n"
+"                    <ul>\r\n"
+"                    <li>add an audio file at <a href=\"!node-add-audio\">create content &gt;&gt; audio</a>.</li>\r\n"
+"                    <li>see your most recent audio files at <a href=\"!user\">user account</a>.</li>\r\n"
+"                    <li>see all of the most recently added audio files at <a href=\"!audio\">audio</a>.</li>\r\n"
+"                    <li>browse for audio by its metadata (artist, album, genre, etc) at <a href=\"!audio-by\">audio &gt;&gt; by</a>.</li>\r\n"
+"                    <li>enable the <em>latest audio</em>, <em>random audio</em>, and <em>browse for audio</em> blocks at <a href=\"!admin-build-block\">administer &gt;&gt; build &gt;&gt; block</a>.</li>\r\n"
+"                    <li>administer audio module at <a href=\"!admin-settings-audio\">administer &gt;&gt; site configuration &gt;&gt; audio</a>.</li>\r\n"
+"                    </ul>"
+msgstr ""
+"<p>Du kan:</p>\n"
+"                    <ul>\n"
+"                    <li>legge til en lydfil på <a href=\"!node-add-audio\">lag innhold &gt;&gt; lyd</a>.</li>\n"
+"                    <li>se dine siste lydfilene på <a href=\"!user\">Min konto</a>.</li>\n"
+"                    <li>se alle de siste lydfilene på <a href=\"!audio\">Lyd</a>.</li>\n"
+"                    <li>liste lydfiler etter metadata (artist, album, sjanger, etc.) på <a href=\"!audio-by\">lyd &gt;&gt; etter</a>.</li>\n"
+"                    <li>aktivere <em>siste lyd</em>, <em>tilfeldig lyd</em>, og <em>liste lyd</em> blokkene på <a href=\"!admin-build-block\">Administrer &gt;&gt; blokk</a>.</li>\n"
+"                    <li>administrere lydmodulen på <a href=\"!admin-settings-audio\">Administrer &gt;&gt; Innstillinger &gt;&gt; lyd</a>.</li>\n"
+"                    <li>laste ned det <em>påkrevde</em> getID3 biblioteket fra <a href=\"!elink-prdownloads-sourceforge-net\">getID3 sourceforge</a> siden.</li>\n"
+"                    </ul>"
+
+#: audio.module:30
+msgid "For more information please read the configuration and customization handbook <a href=\"!audio\">Audio page</a>."
+msgstr "For mer informasjon, vennligst les håndboken på innstillinger og tilpasninger <a href=\"!audio\">Lydsiden</a>."
+
+#: audio.module:33
+#, fuzzy
+msgid "The current PHP configuration limits file uploads to %maxsize."
+msgstr "Gjeldende PHP instillinger begrenser størrelsen på filopplasting til %maxsize"
+
+#: audio.module:34
+msgid "There are two PHP ini settings, upload_max_filesize and post_max_size, that limit the maximum size of uploads. You can change these settings in the php.ini file or by using a php_value directive in Apache .htaccess file. Consult the PHP documentation for more info."
+msgstr "Det er to PHP ini innstillinger, upload_max_filesize og post_max_size, som begrenser maksimum opplastingsstørrelse. Du kan endre disse innstillingene i php.ini eller ved å benytte et php_value - direktiv i Apache .htaccess fil. Se dokumentasjon på PHP for mer informasjon."
+
+#: audio.module:37
+#, fuzzy
+msgid ""
+"These settings let you determine what metadata the audio module tracks. You can add or remove metadata tags and select how they will be used.\r\n"
+"        <ul>\r\n"
+"        <li><em>autocomplete</em> enables javacript autocompletion of the tag based on existing values.</li>\r\n"
+"        <li><em>required</em> forces a user to enter a value</li>\r\n"
+"        <li><em>hidden</em> prevents the tag from being listed in the node view</li>\r\n"
+"        <li><em>browsable</em> allows users to browse for audio using that tag</li>\r\n"
+"        <li><em>written to file</em> indicates that the tag should be saved to the file (this requires getid3 support)</li>\r\n"
+"        <li><em>weight</em> determines the order of the tags, lower weights are listed first</li>\r\n"
+"        <li><em>delete</em> indicates that you would like to remove the tag from the allowed list</li>\r\n"
+"        </ul>"
+msgstr ""
+"Disse innstillingene lar deg bestemme hvilke metadata lydmodulen holder kontroll på. Du kan legge til eller fjerne metadata tag'er og velge hvordan de skal benyttes.\n"
+"        <ul>\n"
+"        <li><em>påkrevet</em> tvinger brukeren til å legge inn en verdi</li>\n"
+"        <li><em>skjult</em> hindrer tag'en fra å listes i nodevisningen</li>\n"
+"        <li><em>listbar</em> tillater brukeren å liste lyd etter denne tag'en</li>\n"
+"        <li><em>skrevet til fil</em> indikerer at tag'en bør skrives til filen (krever getid3 støtte)</li>\n"
+"        <li><em>vekt</em> bestemmer rekkefølgen på tag'ene. Laveste vekt listes først</li>\n"
+"        <li><em>slett</em> indikerer at du ønsker å fjerne tag'en fra den tillatte listen</li>\n"
+"        </ul>"
+
+#: audio.module:47
+msgid "<strong>Note:</strong> deleting a tag will not remove it from the database or file until the node is saved again."
+msgstr "<strong>Merk:</strong> sletting av en tag vil ikke fjerne den fra databasen eller filen før noden lagres igjen."
+
+#: audio.module:60
+#, fuzzy
+msgid "Audio settings"
+msgstr "Lyd metadata"
+
+#: audio.module:65
+msgid "Change settings for the audio module."
+msgstr "Endre innstillinger for lydmodulen."
+
+#: audio.module:68
+#: ;122;884;1253 audio.info:0
+#: ;0
+msgid "Audio"
+msgstr "Lyd"
+
+#: audio.module:75
+#, fuzzy
+msgid "Metadata tags"
+msgstr "metadata tag'er"
+
+#: audio.module:81
+msgid "Players"
+msgstr "Spillere"
+
+#: audio.module:94
+#, fuzzy
+msgid "Browse by..."
+msgstr "list etter"
+
+#: audio.module:124
+msgid "An audio file. The audio file could be used for adding music, podcasts, or audio clips to your site."
+msgstr "En lydfil. lydfilen kan benyttes til å legge musikk, podcaster eller lydklipp til nettstedet ditt."
+
+#: audio.module:293
+#, fuzzy
+msgid "Download audio file"
+msgstr "last ned lyd"
+
+#: audio.module:298
+msgid "@download_count downloads"
+msgstr "@download_count nedlastinger"
+
+#: audio.module:304
+msgid "@play_count plays"
+msgstr "@play_count avspillinger"
+
+#: audio.module:392
+msgid "A file must be provided. If you tried uploading a file, make sure it's less than the upload size limit."
+msgstr "En fil må angis. Dersom du forsøkte å laste opp en fil, sørg for at den er mindre enn maksimum opplastingsstørrelse."
+
+#: audio.module:604
+msgid "The selected file %name can not be uploaded, because it is only possible to upload files with the following extensions: %files-allowed."
+msgstr "Den valgte filen %name kan ikke lastes opp fordi det kun er mulig å laste opp filer med følgende utvidelse: %files-allowed."
+
+#: audio.module:660
+msgid "The title can use the file's metadata. Depending on what's filled out, you maybe able to use any of the following variables: "
+msgstr "Tittelen kan hentes fra filens metadata. Avhengig av hva som er utfylt, kan du benytte en av de følgende variabler:"
+
+#: audio.module:681
+msgid "Audio File Info"
+msgstr "Lydfil informasjon"
+
+#: audio.module:688
+msgid "Current File"
+msgstr "Gjeldende fil"
+
+#: audio.module:689
+msgid "No file is attached."
+msgstr "Ingen filer vedlagt"
+
+#: audio.module:695
+msgid "Add a new audio file"
+msgstr "Legg til en ny lydfil"
+
+#: audio.module:696
+#, fuzzy
+msgid "Click \"Browse...\" to select an audio file to upload. Only files with the following extensions are allowed: %allowed-extensions."
+msgstr "Klikk \"List...\" for å velge en lydfil for opplasting. <strong>MERK:</strong> gjeldende PHP konfigurasjon begrenser opplasting til %maxsize. "
+
+#: audio.module:697
+#, fuzzy
+msgid "<strong>NOTE:</strong> the current PHP configuration limits uploads to %maxsize."
+msgstr "Gjeldende PHP instillinger begrenser størrelsen på filopplasting til %maxsize"
+
+#: audio.module:702
+msgid "Allow file downloads."
+msgstr "Tillat nedlasting av filen"
+
+#: audio.module:704
+msgid "If checked, a link will be displayed allowing visitors to download this audio file on to their own computer."
+msgstr "Dersom denne er valgt, vil en lenke vises som gjør det mulig for besøkende å laste ned denne lydfilen til sin egen datamaskin."
+
+#: audio.module:705
+msgid "<strong>WARNING:</strong> even if you leave this unchecked, clever users will be able to find a way to download the file. This just makes them work a little harder to find the link."
+msgstr "<strong>ADVARSEL:</strong> selv om du lar denne være åpen vil kyndige brukere kunne finne måter å laste ned filen på. Dette gjør bare at de må jobbe litt mer for å få det til."
+
+#: audio.module:715
+msgid "Audio Metadata"
+msgstr "Lyd metadata"
+
+#: audio.module:731
+msgid "Replace this with a new file"
+msgstr "Erstatt denne med en ny fil"
+
+#: audio.module:734
+msgid "Format"
+msgstr "Format"
+
+#: audio.module:740
+msgid "Size (in bytes)"
+msgstr "Størrelse (i bytes)"
+
+#: audio.module:745
+msgid "Length"
+msgstr "Lengde"
+
+#: audio.module:747
+msgid "The format is hours:minutes:seconds."
+msgstr "Formatet er timer:minutter:sekunder."
+
+#: audio.module:751
+msgid "Sample rate"
+msgstr "Samplehastighet"
+
+#: audio.module:757
+msgid "Channel mode"
+msgstr "Kanalmodus"
+
+#: audio.module:759
+msgid "Stereo"
+msgstr "Stereo"
+
+#: audio.module:759
+msgid "Mono"
+msgstr "Mono"
+
+#: audio.module:763
+msgid "Bitrate"
+msgstr "Bitrate"
+
+#: audio.module:768
+msgid "Bitrate mode"
+msgstr "Bitrate modus"
+
+#: audio.module:776
+msgid "Play count"
+msgstr "Spilt antall"
+
+#: audio.module:781
+#, fuzzy
+msgid "Download count"
+msgstr "last ned lyd"
+
+#: audio.module:825
+msgid "Track Number"
+msgstr "Spor nummer"
+
+#: audio.module:827
+msgid "Enter either a single number or fraction here. '1' means that this is the first track on the album, and '1/8' ."
+msgstr "Legg inn enten et enkelt nummer eller en brøk her. '1' betyr at dette er første spor på dette albumet og '1/8' ."
+
+#: audio.module:885
+msgid "Listen to @username's recent audio files"
+msgstr "lytt til @username's siste lydfiler"
+
+#: audio.module:888
+msgid "History"
+msgstr "Historie"
+
+#: audio.module:901
+msgid "audio: Browse by"
+msgstr "lyd: List etter"
+
+#: audio.module:916
+msgid "Browse for audio by"
+msgstr "List etter lyd av"
+
+#: audio.module:932
+msgid "Default node title format"
+msgstr "Standard node tittel format"
+
+#: audio.module:935
+msgid "The audio node's title can use the file's metadata as variables. This will be used as the default title for all new audio nodes. The following values can be used: "
+msgstr "Audio nodens tittel kan benytte filens metadata som variabler. Dette vil bli benyttet som standard for alle nye lydnoder. Følgende verdier kan benyttes:"
+
+#: audio.module:939
+msgid "Node teaser format"
+msgstr "Node ingress format"
+
+#: audio.module:942
+msgid "Specify a teaser format for all audio nodes. In addition to the tags allowed in the title, the following variables are also available: "
+msgstr "Angi et ingressformat for alle lydnoder. I tilleg til tag'ene tillatt i tittelen er følgende variabler også tilgjengelig:"
+
+#: audio.module:946
+msgid "Permitted audio file extensions"
+msgstr "Tillatte lydfil utvidelser"
+
+#: audio.module:949
+msgid "Audio file extensions that users can upload. Separate extensions with a space and do not include a leading dot."
+msgstr "Lydfil utvidelser som brukeren kan laste opp. Adskill utvidelser med mellomrom og ta ikke med ledende punktum."
+
+#: audio.module:953
+msgid "Downloadable by default"
+msgstr "Nedlastbar som standard"
+
+#: audio.module:955
+msgid "Check this to make downloadable the default setting for new audio nodes. You should be aware that even when audio is not marked as downloadable, clever users can still download it, this just makes the work harder. "
+msgstr "Huk denne av dersom du ønsker å gjøre nedlastbar som en standard innstilling for lydnoder. Du bør være klar over at selv om lydnoder ikke er markert som nedlastbar, kan kløktige brukere fremdeles laste ned filen, dette gjør det bare mer vanskelig."
+
+#: audio.module:1047
+msgid "Reset to defaults"
+msgstr "Resett til standard"
+
+#: audio.module:1049
+msgid "The configuration options have been reset to their default values."
+msgstr "Konfigureringsinnstillingene er resatt til sine standard verdier."
+
+#: audio.module:1080
+msgid "The configuration options have been saved."
+msgstr "Konfigureringsinstillingene er lagret."
+
+#: audio.module:1104
+msgid "tag"
+msgstr "tag"
+
+#: audio.module:1104
+msgid "autocomplete"
+msgstr "autofullfør"
+
+#: audio.module:1104
+msgid "required"
+msgstr "påkrevet"
+
+#: audio.module:1104
+msgid "hidden"
+msgstr "skjult"
+
+#: audio.module:1104
+msgid "browsable"
+msgstr "listbar"
+
+#: audio.module:1105
+msgid "written to file"
+msgstr "skrevet til fil"
+
+#: audio.module:1105
+msgid "weight"
+msgstr "vekt"
+
+#: audio.module:1105
+msgid "delete"
+msgstr "slett"
+
+#: audio.module:1124
+#: ;1150
+msgid "Description"
+msgstr "Beskrivelse"
+
+#: audio.module:1129
+#: ;1134
+msgid "URL"
+msgstr "URL"
+
+#: audio.module:1140
+#: ;1150
+msgid "Player"
+msgstr "Spiller"
+
+#: audio.module:1150
+msgid "Homepage"
+msgstr "Hjemmeside"
+
+#: audio.module:1152
+msgid "%format files"
+msgstr "%format filer"
+
+#: audio.module:1159
+msgid "Link"
+msgstr "Lenke"
+
+#: audio.module:1256
+msgid "Browse by"
+msgstr "List etter"
+
+#: audio.module:1259
+msgid "audio by @tag %value"
+msgstr "lyd etter @tag %value"
+
+#: audio.module:1262
+msgid "@tag"
+msgstr "@tag"
+
+#: audio.module:1272
+msgid "Audio by @tag"
+msgstr "lyd etter @tag"
+
+#: audio.module:1282
+msgid "Browse for audio by..."
+msgstr "List lyd etter..."
+
+#: audio.module:1411
+msgid "Click to play"
+msgstr "Klikk for å spille av"
+
+#: audio.module:198
+msgid "administer audio"
+msgstr "Administrer lyd"
+
+#: audio.module:198
+msgid "create audio"
+msgstr "lag lyd"
+
+#: audio.module:198
+msgid "edit own audio"
+msgstr "endre egen lyd"
+
+#: audio.module:199
+msgid "play audio"
+msgstr "spill lyd"
+
+#: audio.module:199
+msgid "download audio"
+msgstr "last ned lyd"
+
+#: audio.module:199
+#, fuzzy
+msgid "view download stats"
+msgstr "last ned lyd"
+
+#: audio.module:0
+msgid "audio"
+msgstr "lyd"
+
+#: audio.info:0
+#, fuzzy
+msgid "Allows you to upload and playback audio files."
+msgstr "Tillater opplasting og avspilling av lydfiler."
+

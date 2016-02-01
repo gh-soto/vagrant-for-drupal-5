@@ -1,0 +1,210 @@
+# translation of send-module.hu.po to Hungarian
+# $Id: send-module.hu.po,v 1.1.2.1 2007/07/31 23:31:22 aries Exp $
+# Generated from files:
+#  send.inc,v 1.9.2.4 2007/02/12 06:05:12 vauxia
+#  send.info,v 1.1 2007/01/05 05:44:46 vauxia
+#  send_views.inc,v 1.1.2.3 2007/01/21 01:09:08 vauxia
+#  send.module,v 1.28.2.4 2007/02/12 06:05:12 vauxia
+#
+# FEHÉR János <feher.janos _at- mindworks.hu>, 2007.
+msgid ""
+msgstr ""
+"Project-Id-Version: send-module.hu\n"
+"POT-Creation-Date: 2007-07-31 23:38+0200\n"
+"PO-Revision-Date: 2007-08-01 01:14+0200\n"
+"Last-Translator: FEHÉR János <feher.janos _at- mindworks.hu>\n"
+"Language-Team: Hungarian <Drupal.hu Fordítási Csapat <forditas [at] drupal.hu>>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms:  nplurals=2; plural=n != 1;\n"
+"X-Generator: KBabel 1.11.4\n"
+
+#: send.inc:11
+msgid "Allow visitors to send full item text"
+msgstr "Engedélyezi a látogatóknak a teljes elem elajánlásét"
+
+#: send.inc:16
+msgid "Link text"
+msgstr "Link szövege"
+
+#: send.inc:20
+msgid "Leave blank to suppress link"
+msgstr "Üresen hagyva a link nem jelenik meg"
+
+#: send.inc:24
+msgid "E-mail subject line"
+msgstr "Az e-mail tárgya"
+
+#: send.inc:31
+msgid "Default message text"
+msgstr "Az alapértelemezett üzenet szövege"
+
+#: send.inc:38
+msgid "Email Template"
+msgstr "Email sablon"
+
+#: send.inc:58
+msgid "Send Threshold"
+msgstr "Küldési küszöb"
+
+#: send.inc:59
+msgid "The maximum number of times per hour a user can send a message.  0 for unlimited"
+msgstr "Egy adott felhasználó által óránként kiküldhető levelek száma. A „0” végtelent jelent."
+
+#: send.inc:67
+msgid "Save configuration"
+msgstr "Beállítás mentése"
+
+#: send.inc:100
+msgid "Enable \"%name\" functionality"
+msgstr "Funkció engedélyezése: „%name”"
+
+#: send.inc:108
+msgid "Permit changes on every item"
+msgstr "Változtatások engedélyezése minden elemre"
+
+#: send.inc:207
+msgid "There was a problem loading this item"
+msgstr "Hiba történt az elem betöltésekor"
+
+#: send.inc:211
+msgid "Unable to send this item"
+msgstr "Nem lehet elküldeni ezt az elemet"
+
+#: send.inc:219
+msgid "You have exceeded the limit for sending items"
+msgstr "A küldhető elemek száma meghaladta az engedélyezettet"
+
+#: send.inc:254;282
+msgid "Email"
+msgstr "Email"
+
+#: send.inc:262;289
+msgid "First Name"
+msgstr "Keresztnév"
+
+#: send.inc:269;295
+msgid "Last Name"
+msgstr "Vezetéknév"
+
+#: send.inc:276
+msgid "Send a copy to myself"
+msgstr "Másolat küldése a feladónak"
+
+#: send.inc:308
+msgid "E-mail Subject Line"
+msgstr "E-mail tárgya"
+
+#: send.inc:326
+msgid "Message Text"
+msgstr "Üzenet szövege"
+
+#: send.inc:357 send.info:0
+msgid "Send"
+msgstr "Küldés"
+
+#: send.inc:387
+msgid "Invalid from address"
+msgstr "Érvénytelen a feladó email címe"
+
+#: send.inc:392
+msgid "Invalid recipient address"
+msgstr "Érvénytelen a címzett email címe"
+
+#: send.inc:424
+msgid "Sent %subject"
+msgstr "Elküldve: %subject"
+
+#: send.inc:482
+msgid "Received %subject"
+msgstr "Fogadva: %subject"
+
+#: send.inc:545
+msgid "A copy of this message has also been sent to %mail"
+msgstr "A levél másolata el lett küldve az alábbi címre is: %mail"
+
+#: send.inc:558
+msgid "Message sent to %mail"
+msgstr "Üzenet ajánlása a %mail címre"
+
+#: send.inc:806
+msgid "From"
+msgstr "Feladó"
+
+#: send.inc:806
+msgid "To"
+msgstr "Címzett"
+
+#: send_views.inc:27
+msgid "Send: Last time sent"
+msgstr "Ajánlás: Küldés utolsó időpontja"
+
+#: send_views.inc:32
+msgid "Display the last time this node was sent via e-mail"
+msgstr "Megjeleníti, hogy a tartalom mikor lett utoljára elküldve emailen"
+
+#: send_views.inc:113
+msgid "Send: Module"
+msgstr "Ajánlás: Modul"
+
+#: send_views.inc:117
+msgid "Send: Sender"
+msgstr "Ajánlás: Feladó"
+
+#: send_views.inc:121
+msgid "Send: Recipient"
+msgstr "Ajánlás: Címzett"
+
+#: send.module:27
+msgid "send this page"
+msgstr "az oldal ajánlása"
+
+#: send.module:35
+msgid "Send modules"
+msgstr "Ajánlási modulok"
+
+#: send.module:38
+msgid "Default settings for \"Send to Friend\" and other modules that send content via e-mail"
+msgstr "Az „Ajánljás ismerősnek” és az ezt használó minden modul ide tartozó alapértelmezett beállításai"
+
+#: send.module:44
+msgid "Defaults"
+msgstr "Alapértelmezett"
+
+#: send.module:171
+msgid "Send to Friend"
+msgstr "Ajánlás ismerősnek"
+
+#: send.module:198
+msgid "send to friend"
+msgstr "ajánlás ismerősnek"
+
+#: send.module:200
+msgid "send @name"
+msgstr "@name ajánlása"
+
+#: send.module:208
+msgid "You have not selected any items to send"
+msgstr "Nem lett egyetlen elem sem kiválasztva"
+
+#: send.module:15
+msgid "administer send"
+msgstr "ajánlás adminisztrálása"
+
+#: send.module:15
+msgid "send nodes"
+msgstr "tartalmak ajánlása"
+
+#: send.module:0
+msgid "send"
+msgstr "küldés"
+
+#: send.info:0
+msgid "Send to friend"
+msgstr "Ajánlás ismerősnek"
+
+#: send.info:0
+msgid "Mail"
+msgstr "Levél"
+

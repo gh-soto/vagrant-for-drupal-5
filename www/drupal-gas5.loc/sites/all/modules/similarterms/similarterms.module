@@ -1,0 +1,244 @@
+<?php
+// $Id: similarterms.module,v 1.1.2.15 2008/07/19 02:37:33 rmiddle Exp $
+// by Jeff Robbins
+
+/**
+ * @file
+ * Similar By Terms module displays a block with similar content
+ * based on taxonomy terms.
+ */
+
+/**
+ * Implementation of hook_block().
+ */
+function similarterms_block($op = 'list', $delta = 0, $edit = array()) {
+  switch ($op) {
+    case 'list':
+      $blocks[]['info'] = t('Similar entries from ANY vocabulary.');
+      if (variable_get('similarterms_vocabularies', 'multi_select_and_tags') == 'all') {
+        foreach (taxonomy_get_vocabularies() as $v) {
+          $blocks[$v->vid]['info'] = t('Similar entries from the @vocab vocabulary.', array('@vocab' => $v->name));
+        }
+      }
+      else {
+        foreach (taxonomy_get_vocabularies() as $v) {
+          // this only makes sense for multi-select vocabularies and free tagging
+          if ($v->multiple || $v->tags) {
+            $blocks[$v->vid]['info'] = t('Similar entries from the @vocab vocabulary.', array('@vocab' => $v->name));
+          }
+        }
+      }
+      return $blocks;
+    case 'configure':
+      $form['count'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Item count'),
+        '#default_value' => variable_get('simterms_count_'. $delta, 5),
+        '#size' => 3,
+        '#description' => t('The maximum number of similar items to display'),
+      );
+      //mimo addition to configuration to limit to same page type
+      $types = array('0' => '<none>', '1' => t('same as current'));
+      $arr_types_obj = node_get_types();
+      foreach ($arr_types_obj as $type => $obj) {
+        $types[$type] = $obj->name;
+      }
+      $form['sametype'] = array(
+        '#type' => 'select',
+        '#title' => t('Content type limit'),
+        '#default_value' => variable_get('simterms_sametype_'. $delta, false),
+        '#options' => $types,
+        '#description' => t('Limit to pages of this or these content type(s)'),
+        '#multiple' => TRUE
+      );
+      if ($delta > 0) {
+        $tree = taxonomy_get_tree($delta);
+        foreach ($tree as $term) {
+          $terms[$term->tid] = $term->name;
+        }
+        $form['ignoreterms'] = array(
+          '#type' => 'select',
+          '#title' => t('Terms to be ignored'),
+          '#default_value' => variable_get('simterms_ignoreterms_'. $delta, array()),
+          '#options' => $terms,
+          '#description' => t('Ignore selected terms here from being used to search for similar entries'),
+          '#multiple' => TRUE
+        );
+      }
+      return $form;
+    case 'save':
+      variable_set('simterms_count_'. $delta, $edit['count']);
+      variable_set('simterms_sametype_'. $delta, $edit['sametype']);
+      variable_set('simterms_ignoreterms_'. $delta, $edit['ignoreterms']);
+      return;
+    case 'view':
+      if ($delta == 0) {
+        $block['subject'] = t('Similar');
+        $block['content'] = theme('similarterms', variable_get('similarterms_display_options', 'title_only'), similarterms_list());
+      }
+      else {
+        $block['subject'] = t('Similar');
+        // $delta = $vocid - integer - vocabulary id, leave out to use ALL terms for this node
+        $block['content'] = theme('similarterms', variable_get('similarterms_display_options', 'title_only'), similarterms_list($delta));
+      }
+      return $block;
+  }
+}
+
+/**
+ * Output the block
+ *
+ * @param $vocid
+ *   integer - vocabulary id, leave out to use ALL terms for this node
+ * @param $nid
+ *   integer - nid, leave out to use the current node
+ * @return
+ *   an array of node objects
+ */
+function similarterms_list($vocid = 0, $nid = NULL) {
+  $nodes = array();
+
+  if (arg(0) == 'node' && is_numeric(arg(1))) {
+    $nid = arg(1);
+  }
+  if ($nid != NULL) {
+    $full_node = node_load($nid);
+    if ($vocid == 0) {
+      $terms = array_keys(taxonomy_node_get_terms($full_node->nid));
+    }
+    else {
+      $terms = array_keys(taxonomy_node_get_terms_by_vocabulary($full_node->nid, $vocid));
+    }
+    // Filter out some terms
+    $terms_filter = variable_get('simterms_ignoreterms_'. $vocid, array());
+    for ($i = 0; $i < count($terms_filter); $i++) {
+      $idx = array_search($terms_filter[$i], $terms);
+      if ($idx >= 0) {
+        unset($terms[$idx]);
+      }
+    }
+    $terms = implode(',', $terms);
+    $count = variable_get('simterms_count_'. $vocid, 5);
+    if (!empty($terms)) {
+      //past events
+      $pasts = array();
+      $types = variable_get('simterms_sametype_'. $vocid, false);
+      if (($types !== false) && is_array($types) && ($types['0'] == NULL) ) {
+        if ($types[1]) {
+          $node_obj = node_load($nid);
+          $types[1] = $node_obj->type;
+        }
+        $str_types = "'". implode("','", $types) ."'"; // couldnt find a solutin for IN %s problem and \' substi
+        $sql = sprintf(
+          'SELECT n.nid, n.title, COUNT(n.nid) AS ncount '.
+            'FROM {node} n '.
+            'INNER JOIN {term_node} tn ON n.nid = tn.nid '.
+            'WHERE tn.tid IN (%s) '.
+            'AND n.type IN ('. $str_types .') '.
+            'AND n.nid != %d '.
+            'AND n.status = 1 '.
+            'AND n.moderate = 0 '.
+            'GROUP BY n.nid, n.title, n.created '.
+            'ORDER BY ncount DESC, n.created DESC '.
+            'LIMIT %d',
+          $terms, $nid, $count);
+      }
+      else {
+        $sql = sprintf(
+          'SELECT n.nid, n.title, COUNT(n.nid) AS ncount '.
+            'FROM {node} n '.
+            'INNER JOIN {term_node} tn ON n.nid = tn.nid '.
+            'WHERE tn.tid IN (%s) '.
+            'AND n.nid != %d '.
+            'AND n.status = 1 '.
+            'AND n.moderate = 0 '.
+            'GROUP BY n.nid, n.title, n.created '.
+            'ORDER BY ncount DESC, n.created DESC '.
+            'LIMIT %d',
+          $terms, $nid, $count);
+      }
+      $sql = db_rewrite_sql($sql);
+      $result = db_query($sql);
+      while ($r = db_fetch_object($result)) {
+        $nodes[] = node_load($r->nid);
+      }
+    }
+  }
+  return $nodes;
+}
+
+/**
+ * Implementation of hook_menu().
+ */
+function similarterms_menu($may_cache) {
+  $items = array();
+
+  if ($may_cache) {
+    $items[] = array(
+      'path' => 'admin/settings/similarterms',
+      'title' => t('Similar Terms'),
+      'description' => t('Basic Settings for similar term most settings are in the blocks config.'),
+      'callback' => 'drupal_get_form',
+      'callback arguments' => array('similarterms_admin_settings'),
+      'access' => user_access('administer site configuration'),
+      'type' => MENU_NORMAL_ITEM, // optional
+    );
+  }
+  return $items;
+}
+
+/**
+ * Module settings page.
+ */
+function similarterms_admin_settings() {
+  $vocabularies_options = array(
+    'multi_select_and_tags' => 'Display multi-select and tags types only',
+    'all' => 'Display all vocabularies types',
+    );
+  $form['similarterms_vocabularies'] = array(
+    '#type' => 'radios',
+    '#title' => t('Vocabularies types to list'),
+    '#default_value' => variable_get("similarterms_vocabularies", 'multi_select_and_tags'),
+    '#options' => $vocabularies_options,
+    '#required' => FALSE,
+  );
+  $display_options = array(
+    'title_only' => 'Display titles only',
+    'teaser' => 'Display titles and teaser',
+    );
+  $form['similarterms_display_options'] = array(
+    '#type' => 'radios',
+    '#title' => t('Display Options'),
+    '#default_value' => variable_get('similarterms_display_options', 'title_only'),
+    '#options' => $display_options,
+    '#required' => FALSE,
+    '#prefix' => '<div>',
+    '#suffix' => '</div>',
+  );
+  return system_settings_form($form);
+}
+
+/**
+ * Theme function for similar block
+ *
+ * Available variables:
+ * - $teaser: Display Yes = 0. No = 1
+ * - $items: the list.
+ *
+ * @param array $nodes
+ */
+function theme_similarterms($display_options, $items) {
+  $output = "";
+  if (!empty($items)) {
+    $output .= "<ul>\n";
+    foreach ($items as $item) {
+      $output .= '<li>'. l($item->title, 'node/'. $item->nid);
+      if ($display_options == 'teaser') {
+        $output .= ' - '. $item->teaser;
+      }
+      $output .= "</li>\n";
+    }
+    $output .= "</ul>\n";
+  }
+  return $output;
+}

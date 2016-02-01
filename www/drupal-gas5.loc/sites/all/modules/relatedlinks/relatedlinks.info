@@ -1,0 +1,9 @@
+; $Id: relatedlinks.info,v 1.2 2007/06/18 22:53:56 dww Exp $
+name = Related Links
+description = Displays links related to content.
+
+; Information added by drupal.org packaging script on 2008-05-13
+version = "5.x-2.2-beta"
+project = "relatedlinks"
+datestamp = "1210712418"
+

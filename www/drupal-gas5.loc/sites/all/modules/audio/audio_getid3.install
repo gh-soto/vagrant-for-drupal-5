@@ -1,0 +1,11 @@
+<?php
+// $Id: audio_getid3.install,v 1.1 2007/01/19 23:45:59 drewish Exp $
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function audio_getid3_uninstall() {
+  variable_del('audio_getid3_path');
+  variable_del('audio_getid3_show_warnings');
+}
+

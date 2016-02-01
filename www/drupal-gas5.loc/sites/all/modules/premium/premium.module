@@ -1,0 +1,207 @@
+<?php /* $Id: premium.module,v 1.2.2.6 2007/08/21 18:09:37 vauxia Exp $ */
+/**
+ * @file Restrict access to the full body of premium content
+ */
+ 
+/**
+ * Implementation of hook_help()
+ */
+function premium_help($section) {
+  switch($section) {
+    case 'admin/modules#description' :
+      return t('Restrict access to premium content');
+  }
+  return;
+}
+
+/**
+ * Implementation of hook_perm()
+ */
+function premium_perm() {
+  return array('access premium content');
+}
+
+/**
+ * Implementation of hook_settings()
+ */
+function premium_settings() {
+  $form = array();
+  
+  // timeframe for premium + update existing nodes
+  $form['premium_mode'] = array(
+    '#type'          => 'radios', 
+    '#title'         => t('Mode'), 
+    '#default_value' => variable_get('premium_mode', '0'), 
+    '#options'       => array(
+      '0' => t('Premium items are permanently restricted'), 
+      'archive' => t('Protect archives only: Items switch to premium status after a specified period'), 
+      'latest' => t('Protect latest content only: Items switch to non-premium status after a specified period'), 
+    ),
+  );
+  
+  $form['premium_time_count'] = array(
+    '#type'          => 'select', 
+    '#title'         => t('Count'), 
+    '#default_value' => variable_get('premium_time_count', '2'), 
+    '#options'       => array(1=>1, 2=>2, 3=>3, 4=>4, 5=>5, 6=>6, 7=>7, 8=>8, 9=>9, 
+      10=>10, 11=>11, 12=>12, 13=>13, 14=>14, 15=>15), 
+  );
+  
+  $form['premium_time_unit'] = array(
+    '#type'          => 'select', 
+    '#title'         => t('Unit'), 
+    '#default_value' => variable_get('premium_time_unit', 'W'), 
+    '#options'       => array('D' => t('Days'), 
+        'W' => t('Weeks'), 
+        'M' => t('Months'), 
+        'Y' => t('Years')), 
+  );
+  
+  $form['premium_message'] = array(
+    '#type'          => 'textarea', 
+    '#title'         => t('Premium body text'), 
+    '#default_value' => variable_get('premium_message', t('Full text available to premium subscribers only')), 
+    '#cols'          => 60, 
+    '#rows'          => 30, 
+    '#description'   => t('When a visitor doesn\'t have access to a premium item they will see this message instead of its full text')
+  );
+  return $form;
+}
+
+/**
+ * Implementation of hook_cron()
+ */
+function premium_cron() {
+  $ts = time();
+  db_query("DELETE FROM {premium} WHERE start_ts < $ts AND end_ts != 0 AND end_ts < $ts");
+}
+
+/**
+ * Implementation of hook_nodeapi()
+ */
+function premium_nodeapi(&$node, $op, $teaser) {
+  $node->premium = _premium_node($node);
+
+  switch ($op) {
+    
+    case 'insert':
+    case 'delete':
+    case 'update':
+      if ($node->nid) {
+        db_query('DELETE FROM {premium} WHERE nid = %d', $node->nid);
+        if ($op == 'delete') return;
+      }
+      if ($node->premium) {
+       $start_ts = $end_ts = 0 ;
+        _premium_offset($node, $start_ts, $end_ts);
+        db_query('INSERT INTO {premium} (nid, start_ts, end_ts) 
+          VALUES ( %d, %d, %d )', $node->nid, $start_ts, $end_ts);
+      }
+      return;
+      
+    case 'load':
+      $ts = time();
+      return array('premium' => (int) db_result(db_query(
+          "SELECT 1 FROM {premium}  WHERE nid = %d 
+          AND ( start_ts = 0 OR start_ts > $ts) AND end_ts < $ts", $node->nid)));
+      
+    case 'view':
+      $node->premium_access = true;
+
+      global $user;
+      if (!$node->premium || user_access('access premium content')) {
+        return;                  // not premium content or user has privileges
+      }
+      if ($teaser) {
+        return;                  // not viewing the body
+      }
+      foreach (module_implements('premium_access') as $name) {
+        $function = $name.'_premium_access';
+        if ($function($user, $node)) {
+          return;                // access granted explicitly
+        }
+      }
+  
+      $node->premium_access = false;
+      $node->body = theme('premium_body', $node);
+  }
+  return;
+} 
+
+/**
+ * Implementation of hook_form_alter()
+ * 
+ * Add the Premium checkbox to the node editing options and default settings
+ * The Premium flag will behave like other options (published, promote, etc)
+ */
+function premium_form_alter($form_id, &$form) {
+  $type = $form['type']['#value'];
+  $title = t('Access restricted for non-premium users');
+  
+  switch ($form_id) {
+    
+    case $type.'_node_settings':
+      $form['workflow']["node_options_$type"]['#options']['premium'] = $title;
+      if (_premium_node($type)) {
+        $form['workflow']["node_options_$type"]['#default_value'][] = 'premium';
+      }
+      return;
+      
+    case $type.'_node_form':
+      if (user_access('administer nodes')) {
+        $node = $form['#node'];
+        $form['options']['premium'] = array(
+          '#type' => 'checkbox', 
+          '#title' => $title, 
+          '#default_value' => _premium_node($node),
+        );
+      }
+      return;
+  }
+}
+
+/**
+ * Calculate time offset for auto-aging / auto-archiving
+ */
+function _premium_offset($node, &$start_ts, &$end_ts) {
+  $c = variable_get('premium_time_count',2);
+  $u = variable_get('premium_time_unit','W');
+  $s = $node->created;
+  
+  switch ( variable_get('premium_mode', '0') ) {
+    
+    case 'archive' :             // public first, premium after awhile
+      $start_ts = mktime(date('H',$s)+($u=='H')*$c, 0, 0, date('m',$s)+($u=='M')*$c,
+        date('d',$s)+($u=='D')*$c+($u=='W')*$c*7, date('y',$s)+($u=='Y')*$c);
+      return;
+    
+    case 'latest' :             // premium first, ages to general availability
+      $end_ts   = mktime(date('H',$s)+($u=='H')*$c, 0, 0, date('m',$s)+($u=='M')*$c,
+        date('d',$s)+($u=='D')*$c+($u=='W')*$c*7, date('y',$s)+($u=='Y')*$c);
+      return;
+  }
+  return;
+}
+
+/**
+ * Establish premium settings for a node or node type
+ */
+function _premium_node($node) {
+  // This is a node type: use default settings
+  if (is_string($node)) {
+    return in_array('premium', variable_get("node_options_{$node}",array()));
+  }
+
+  // Already has a value
+  if (isset($node->premium)) return $node->premium;
+
+  // Use default settings for this node type
+  return in_array('premium', variable_get("node_options_{$node->type}",array()));
+}
+
+/**
+ * Reformat the message body with a premium content message
+ */
+function theme_premium_body($node) {
+  return check_markup($node->teaser, $node->format, FALSE) . '<br />'.variable_get('premium_message', t('Full text available to premium subscribers only'));
+}

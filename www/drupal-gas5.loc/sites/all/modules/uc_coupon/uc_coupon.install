@@ -1,0 +1,51 @@
+<?php
+// $Id: uc_coupon.install,v 1.6 2009/01/23 12:43:49 longwave Exp $
+
+/**
+ * @file
+ * Ubercart uc_coupon.module schema
+ */
+function uc_coupon_install() {
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+      db_query("CREATE TABLE {uc_coupons} (
+        cid int(11) NOT NULL auto_increment,
+        name varchar(30) NOT NULL,
+        code varchar(40) NOT NULL,
+        value decimal(6,2) NOT NULL,
+        type varchar(12) NOT NULL default 'price',
+        status int(1) NOT NULL default '1',
+        valid_until int(11) default NULL,
+        max_uses int(4) NOT NULL,
+        products varchar(50) NOT NULL,
+        users text,
+        roles int(1) NOT NULL,
+        minimum_order decimal(6,2) NOT NULL default 0.00,
+        PRIMARY KEY  (cid)
+        )");
+  
+    db_query("CREATE TABLE {uc_coupons_orders} (
+      cuid int(11) NOT NULL auto_increment,
+      cid int(11) NOT NULL,
+      oid int(11) NOT NULL default '0',
+      value decimal(10,2) NOT NULL default '0.00',
+      user varchar(50) NOT NULL default '0',
+      role varchar(40) NOT NULL default '0',
+      code varchar(40) NOT NULL default 'default_code',
+      PRIMARY KEY  (cuid)
+      )");
+    break;
+  }
+}
+
+function uc_coupon_uninstall() {
+  db_query("DROP TABLE {uc_coupons}");
+  db_query("DROP TABLE {uc_coupons_orders}");
+  drupal_set_message("UC Coupon Successfully Uninstalled.");
+}
+
+function uc_coupon_update_1() {
+  $ret[] = update_sql("ALTER TABLE {uc_coupons} ADD COLUMN products varchar(50) NOT NULL AFTER max_uses");
+  return $ret;
+}

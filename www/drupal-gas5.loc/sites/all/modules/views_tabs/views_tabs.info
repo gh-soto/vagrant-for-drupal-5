@@ -1,0 +1,11 @@
+; $Id $
+name = Views Tabs
+description = Enables the presentation of views through tabs.
+package = Views
+dependencies = views tabs
+
+; Information added by drupal.org packaging script on 2007-08-08
+version = "5.x-1.x-dev"
+project = "views_tabs"
+datestamp = "1186532093"
+

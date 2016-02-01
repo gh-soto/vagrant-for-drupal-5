@@ -1,0 +1,10 @@
+; $Id: audio.info,v 1.5.2.1 2007/06/18 23:06:30 dww Exp $
+name = Audio
+description = Allows you to upload and playback audio files.
+package = Audio
+dependencies = views views_rss
+; Information added by drupal.org packaging script on 2008-05-25
+version = "5.x-1.4"
+project = "audio"
+datestamp = "1211735402"
+

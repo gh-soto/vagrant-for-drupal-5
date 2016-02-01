@@ -1,0 +1,10 @@
+; $Id: jquery_cookie.info,v 1.1 2007/10/14 05:14:31 redbox2000drupalorg Exp $
+name = "jQuery Cookie"
+description = "Drupal module wrapper for the jQuery Cookie plug-in by Klaus Hartl."
+package = "User Interface"
+
+; Information added by drupal.org packaging script on 2008-02-14
+version = "5.x-1.0"
+project = "jquery_cookie"
+datestamp = "1202967013"
+

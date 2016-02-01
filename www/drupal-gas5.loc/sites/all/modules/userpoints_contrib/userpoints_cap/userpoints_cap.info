@@ -1,0 +1,9 @@
+name = Userpoints Cap
+description = Limit the number of points a user can earn.
+package = Userpoints
+dependencies = userpoints
+; Information added by drupal.org packaging script on 2007-12-27
+version = "5.x-2.0"
+project = "userpoints_contrib"
+datestamp = "1198796108"
+

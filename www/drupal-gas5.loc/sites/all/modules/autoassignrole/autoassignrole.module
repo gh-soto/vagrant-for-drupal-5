@@ -1,0 +1,233 @@
+<?php
+define("AUTOASSIGNROLE_ROLE", "");
+define("AUTOASSIGNROLE_ROLE_ACTIVE", 0);
+define("AUTOASSIGNROLE_ROLE_USER_ACTIVE", 0);
+define("AUTOASSIGNROLE_ROLE_USER", "");
+define("AUTOASSIGNROLE_ROLE_USER_MULTIPLE", 0);
+define("AUTOASSIGNROLE_ROLE_USER_DESCRIPTION", "");
+define("AUTOASSIGNROLE_ROLE_USER_TITLE", t("Role"));
+define("AUTOASSIGNROLE_ROLE_SORT", "SORT_ASC");
+
+/**
+ * Implementation of hook_menu().
+ *
+ * @return array
+ */
+function autoassignrole_menu($may_cache) {
+  $items = array();
+  if ($may_cache) {
+    $items[] = array(
+    'path' => 'admin/user/autoassignrole',
+    'title' => t('Auto assign role'),
+    'description' => t('Auto Assign Role Settings.'),
+    'callback' => 'drupal_get_form',
+    'callback arguments' => 'autoassignrole_settings',
+    'access' => user_access('administer autoassignrole'),
+    );
+  }
+  return $items;
+}
+function autoassignrole_settings() {
+  $form['autoassignrole_settings_auto'] = array(
+  '#type' => 'fieldset',
+  '#title' => t('Automatic Role Assignment'),
+  '#collapsible' => TRUE,
+  '#collapsed' => TRUE,
+  );
+  $form['autoassignrole_settings_auto']['AUTOASSIGNROLE_ROLE_ACTIVE'] = array(
+    '#type' => 'radios',
+    '#title' => t('Automatic role assignment'),
+    '#description' => t('Automatic role assignment occurs when the user first logins to the account.  This happens without the users knowledge.'),
+    '#default_value' => variable_get('AUTOASSIGNROLE_ROLE_ACTIVE',0),
+    '#options' => array(1 => t('Enabled'), 0 => t('Disabled')),
+  );
+  $form['autoassignrole_settings_auto']['AUTOASSIGNROLE_ROLE'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Role'),
+    '#default_value' => variable_get('AUTOASSIGNROLE_ROLE',''),
+    '#options' => user_roles(),
+    '#description' => t('Select the roles to assign new users.'),
+  );
+  $form['autoassignrole_settings_user'] = array(
+  '#type' => 'fieldset',
+  '#title' => t('User Role Assignment'),
+  '#collapsible' => TRUE,
+  '#collapsed' => TRUE,
+  );
+  $form['autoassignrole_settings_user']['AUTOASSIGNROLE_ROLE_USER_ACTIVE'] = array(
+    '#type' => 'radios',
+    '#title' => t('User Role Assignment'),
+    '#description' => t('The end user will be allowed to select the following roes when they log in.'),
+    '#default_value' => variable_get('AUTOASSIGNROLE_ROLE_USER_ACTIVE',0),
+    '#options' => array(1 => t('Enabled'), 0 => t('Disabled')),
+  );
+  $form['autoassignrole_settings_user']['AUTOASSIGNROLE_ROLE_USER'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Role'),
+    '#default_value' => variable_get('AUTOASSIGNROLE_ROLE_USER',''),
+    '#options' => user_roles(),
+    '#description' => t('Select the roles that are offered to new users.'),
+  );
+  $form['autoassignrole_settings_user']['AUTOASSIGNROLE_ROLE_USER_MULTIPLE'] = array(
+    '#type' => 'radios',
+    '#title' => t('User Role Selection'),
+    '#description' => t('Should the end user be allowed to choose a single role or can they choose multiple roles?'),
+    '#default_value' => variable_get('AUTOASSIGNROLE_ROLE_USER_MULTIPLE',0),
+    '#options' => array(0 => t('Single Role'), 1 => t('Multiple Roles')),
+  );
+  $form['autoassignrole_settings_user']['AUTOASSIGNROLE_ROLE_USER_REQUIRED'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Required'),
+    '#description' => t('Should the end user be required to choose a role?'),
+    '#default_value' => variable_get('AUTOASSIGNROLE_ROLE_USER_REQUIRED',0),
+  );
+  $form['autoassignrole_settings_user']['AUTOASSIGNROLE_ROLE_SORT'] = array(
+    '#type' => 'select',
+    '#title' => t('Sorting'),
+    '#description' => t('Default sort order of roles the user will see.'),
+    '#default_value' => variable_get('AUTOASSIGNROLE_ROLE_SORT','SORT_ASC'),
+    '#options' => array('SORT_ASC' => t('Ascending'), 'SORT_DESC' => t('Descending')),
+  );
+  $form['autoassignrole_settings_user']['AUTOASSIGNROLE_ROLE_USER_FIELDSET'] = array(
+    '#type' => 'textfield',
+    '#title' => t('User Role Fieldset Title'),
+    '#description' => t('The title of the fieldset that contains role options.'),
+    '#default_value' => variable_get('AUTOASSIGNROLE_ROLE_USER_FIELDSET', 'User Role Selection'),
+    '#size' => 60,
+    '#maxlength' => 128, 
+    '#required' => FALSE,
+  );
+  $form['autoassignrole_settings_user']['AUTOASSIGNROLE_ROLE_USER_TITLE'] = array(
+    '#type' => 'textfield',
+    '#title' => t('User Role Title'),
+    '#description' => t('The title of the field that contains the role options the end user sees during registration.'),
+    '#default_value' => variable_get('AUTOASSIGNROLE_ROLE_USER_TITLE',""),
+    '#size' => 60,
+    '#maxlength' => 128, 
+    '#required' => FALSE,
+  );
+  $form['autoassignrole_settings_user']['AUTOASSIGNROLE_ROLE_USER_DESCRIPTION'] = array(
+    '#type' => 'textarea',
+    '#title' => t('User Role Description'),
+    '#description' => t('The description displayed to the end user when they are selecting thier role during registration.'),
+    '#default_value' => variable_get('AUTOASSIGNROLE_ROLE_USER_DESCRIPTION',""),
+    '#required' => FALSE,
+  );
+  return system_settings_form($form);
+}
+/**
+ * Implementation of hook_perm().
+ * @return array
+ */
+function autoassignrole_perm() {
+  return array('administer autoassignrole');
+}
+
+/**
+ * Implementation of hook_user().
+ */
+function autoassignrole_user($type, &$edit, &$user, $category = NULL) {
+  switch ($type) {
+    case 'insert':
+      if(variable_get('AUTOASSIGNROLE_ROLE_ACTIVE','0') == 1) {
+        $roles = variable_get('AUTOASSIGNROLE_ROLE','0');
+        if(is_array($roles)) {
+          $sql = 'INSERT INTO {users_roles} (uid, rid) values (%d, %d)';
+          foreach($roles as $key => $value) {
+            if($value > 0) {
+              db_query($sql, $user->uid, $value);
+            }
+          }
+        }
+      }
+      if(variable_get('AUTOASSIGNROLE_ROLE_USER_ACTIVE','0') == 1) {
+        $sql = 'INSERT INTO {users_roles} (uid, rid) values (%d, %d)';
+        if(is_array($edit['AUTOASSIGNROLE_ROLE_USER'])) {
+          foreach($edit['AUTOASSIGNROLE_ROLE_USER'] as $key => $value) {
+            if($value > 0) {
+              db_query($sql, $user->uid, $value);
+            }
+          }
+        } else {
+          db_query($sql, $user->uid, $edit['AUTOASSIGNROLE_ROLE_USER']);
+        }
+      }
+     break;
+  }
+}
+
+function autoassignrole_form_alter($form_id, &$form) {
+  if ($form_id == "user_register" && variable_get('AUTOASSIGNROLE_ROLE_USER_ACTIVE','0') == 1) {
+    $form['autoassignrole_user'] = array(
+    '#type' => 'fieldset',
+    '#title' => variable_get('AUTOASSIGNROLE_ROLE_USER_FIELDSET','User Role Selection'),
+    '#collapsible' => FALSE,
+    '#collapsed' => FALSE,
+    );
+    $form['autoassignrole_user']['AUTOASSIGNROLE_ROLE_USER'] = array(
+      '#type' => _autoassignrole_user_input('type'),
+      '#title' => variable_get('AUTOASSIGNROLE_ROLE_USER_TITLE',""),
+      '#options' => _autoassignrole_intersect(),
+      '#required' => _autoassignrole_user_input('required'),
+      '#description' => variable_get('AUTOASSIGNROLE_ROLE_USER_DESCRIPTION',""),
+    );
+  }
+}
+function _autoassignrole_user_input($args) {
+  switch ($args) {
+    case 'type':
+      if(variable_get('AUTOASSIGNROLE_ROLE_USER_MULTIPLE',0) == 0) {
+        $type = 'radios';
+      } else {
+        $type = 'checkboxes';
+      }
+      return $type;
+      break;
+    case 'required':
+      if(variable_get('AUTOASSIGNROLE_ROLE_USER_REQUIRED',0) == 0) {
+        $required = FALSE;
+      } else {
+        $required = TRUE;
+      }
+      return $required;
+      break;
+  }  
+}
+
+function _autoassignrole_intersect() {
+  $autoassignrole_roles = variable_get("AUTOASSIGNROLE_ROLE_USER","");
+  foreach($autoassignrole_roles as $key => $value) {
+    if($value == 0) {
+      unset($autoassignrole_roles[$key]);
+    }
+  }
+  $result = _autoassignrole_array_intersect_key(user_roles(), $autoassignrole_roles);
+  if(variable_get("AUTOASSIGNROLE_ROLE_SORT", "SORT_ASC") == "SORT_ASC") {
+    array_multisort($result,SORT_ASC);
+  } else {
+  	array_multisort($result,SORT_DESC);
+  }
+  return $result;
+}
+function _autoassignrole_array_intersect_key($isec, $keys) {
+  $argc = func_num_args();
+  if ($argc > 2) {
+    for ($i = 1; !empty($isec) && $i < $argc; $i++) {
+      $arr = func_get_arg($i);
+      foreach (array_keys($isec) as $key) {
+        if (!isset($arr[$key])) {
+          unset($isec[$key]);
+        }
+      }
+    }
+    return $isec;
+  } else {
+    $res = array();
+    foreach (array_keys($isec) as $key) {
+      if (isset($keys[$key])) {
+        $res[$key] = $isec[$key];
+      }
+    }
+    return $res;
+  }
+}

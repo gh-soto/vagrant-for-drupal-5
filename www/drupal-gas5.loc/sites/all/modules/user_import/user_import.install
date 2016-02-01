@@ -1,0 +1,94 @@
+<?php
+// $Id: user_import.install,v 1.5.2.2 2007/03/05 01:39:43 MegaGrunt Exp $
+
+/**
+ * Implementation of hook_install()
+ *
+ * This will automatically install the database tables for the user import module for both the MySQL and PostgreSQL databases.
+ *
+ * If you are using another database, you will have to install the tables by hand, using the queries below as a reference.
+ *
+ * Note that the curly braces around table names are a drupal-specific feature to allow for automatic database table prefixing,
+ * and will need to be removed.
+ */
+function user_import_install() {
+  switch ($GLOBALS['db_type']) {
+    case 'mysqli':
+    case 'mysql':
+      $query1 = db_query("CREATE TABLE IF NOT EXISTS {user_import} (
+                        import_id int(10) unsigned NOT NULL auto_increment,
+                        name varchar(25) NOT NULL default '',
+                        filename varchar(50) NOT NULL default '',
+                        oldfilename varchar(50) NOT NULL default '',
+                        filepath tinytext NOT NULL,
+                        started int(11) NOT NULL default '0',
+                        pointer int(10) NOT NULL default '0',
+                        processed int(10) NOT NULL default '0',
+                        valid int(10) NOT NULL default '0',
+                        first_line_skip int(1) NOT NULL default '0',
+                        contact int(1) NOT NULL default '0',
+                        username_space int(1) NOT NULL default '0',
+                        send_email int(1) NOT NULL default '0',
+                        field_match longtext NOT NULL,
+                        roles varchar(255) NOT NULL default '',
+                        options longtext NOT NULL,
+                        setting varchar(10) NOT NULL default '',
+                        PRIMARY KEY  (import_id)
+                        ) /*!40100 DEFAULT CHARACTER SET utf8 */;");
+  
+      $query2 = db_query("CREATE TABLE IF NOT EXISTS {user_import_errors} (
+                        import_id int(10) NOT NULL default '0',
+                        data longtext NOT NULL,
+                        error varchar(25) NOT NULL default '',
+                        KEY import_id (import_id)
+                        ) /*!40100 DEFAULT CHARACTER SET utf8 */;");
+
+      if ($query1 && $query2) {
+        $created = TRUE;
+      }
+      break;      
+  }
+  
+  if ($created) {
+    drupal_set_message(t('User Import module installed successfully.'));
+  }
+  else {
+    drupal_set_message(t('Table installation for the User Import module was unsuccessful. The tables may need to be installed by hand. See user_import.install file for a list of the installation queries.'), 'error');
+  }
+  
+  return;
+}
+
+function user_import_update_1() {
+
+    _system_update_utf8(array('user_import', 'user_import_errors'));
+    
+  return;
+}
+
+function user_import_update_2() {
+  $ret = array();
+  db_add_column($ret, 'user_import', 'options', 'longtext');
+  return $ret;
+}
+
+function user_import_update_3() {
+  $ret = array();
+  $ret[] = update_sql("ALTER TABLE {user_import} CHANGE iid import_id INT(10) UNSIGNED NOT NULL AUTO_INCREMENT");
+  $ret[] = update_sql("ALTER TABLE {user_import} CHANGE first_line first_line_skip INT(10) UNSIGNED NOT NULL default '0'");  
+  $ret[] = update_sql("ALTER TABLE {user_import_errors} CHANGE iid import_id INT(10) UNSIGNED NOT NULL default '0'");
+  return $ret;
+}
+
+/**
+* Implementation of hook_uninstall().
+*/
+function user_import_uninstall() {
+  db_query('DROP TABLE {user_import}');
+  db_query('DROP TABLE {user_import_errors}');
+  variable_del('user_import_settings');
+  variable_del('user_import_max');
+  variable_del('user_import_line_max');
+  variable_del('user_export_checked_usernames');
+}
+

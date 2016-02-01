@@ -1,0 +1,5 @@
+; $d $
+name = Bonus: Views Export
+description = "Plugin to export views to Comma Separated Values (CSV, opens in spreadsheet programs), or Doc"
+package = Views
+dependencies = views

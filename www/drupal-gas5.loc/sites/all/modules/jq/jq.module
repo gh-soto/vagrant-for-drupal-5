@@ -1,0 +1,204 @@
+<?php
+// $Id: jq.module,v 1.11 2008/05/04 19:03:24 aaron Exp $
+
+/**
+ *  implements hook_menu
+ */
+function jq_menu($may_cache) {
+  $items = array();
+  if ($may_cache) {
+    $items[] = array(
+      'path' => 'admin/settings/jq',
+      'title' => t('jQ Plugin Administration'),
+      'description' => t('Administer jQ (jQuery) Plugin Repository.'),
+      'callback' => 'drupal_get_form',
+      'callback arguments' => array('jq_settings_form'),
+      'type' => MENU_NORMAL_ITEM,
+      'access' => user_access('administer jq'),
+    );
+  }
+  return $items;
+}
+
+function jq_perm() {
+  return array('administer jq');
+}
+
+/**
+ *  The administration form. Allows an administrator to turn off specific plugins
+ */
+function jq_settings_form() {
+  $plugins = jq_plugins(NULL, FALSE, TRUE);
+  $form = array();
+  $form['jq'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('jQuery Plugins'),
+    '#description' => t('These jQuery plugins are currently registered through the jQ module.'),
+    '#collapsible' => TRUE,
+  );
+  foreach ($plugins as $key => $plugin) {
+    $description = $plugin['description'];
+    if ($plugin['version'] || $plugin['url']) {
+      $description .= '<br />';
+    }
+    if ($plugin['version']) {
+      $description .= t('<br />%Version: @version', array('%Version' => t('Version'), '@version' => $plugin['version']));
+    }
+    if ($plugin['url']) {
+      $description .= t('<br />%Homepage: !url', array('%Homepage' => t('Homepage'), '!url' => l($plugin['name'], $plugin['url'])));
+    }
+    $description .= t('<br />%Invocation: ', array('%Invocation' => t('Invocation')));
+    $description .= $plugin['invocation'] ? $plugin['invocation'] : t('Invoke this plugin with %code', array('%code' => "jq_add('$key');"));
+    $form['jq']['jq_allow_' . $key] = array(
+      '#type' => 'fieldset',
+      '#title' => $plugin['name'],
+      '#collapsible' => TRUE,
+      '#collapsed' => TRUE,
+    );
+    $form['jq']['jq_allow_' . $key]['allow'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Enable @plugin (%code)', array('@plugin' => $plugin['name'], '%code' => $key)),
+      '#description' => $description,
+      '#default_value' => variable_get('jq_allow_' . $key, TRUE),
+    );
+    $subform = module_invoke($plugin['module'], 'jq', 'settings');
+    if (is_array($subform)) {
+      $form['jq']['jq_allow_' . $key]['settings'] = array(
+        '#type' => 'fieldset',
+        '#title' => t('Extra settings'),
+        '#collapsible' => TRUE,
+        '#collapsed' => FALSE,
+      );
+      $form['jq']['jq_allow_' . $key]['settings']['subform'] = $subform;
+    }
+  }
+  if (empty($plugins)) {
+    drupal_set_message(t('There are currently no defined jQuery plugins registered through the jQ module. You only need to enable this module if directed to by another.'), 'error');
+  }
+  return system_settings_form($form);
+}
+
+/**
+ *  This will add a specific jquery plugin to a page, if it hasn't already been.
+ *  Returns whether the plugin was successfully loaded or not. It will pass through any extra arguments.
+ *
+ *  For a plugin to be registered with this module, a module needs to invoke hook_jq.
+ *  hook_jq($op = 'info|add', $plugin = NULL)
+ *  if $op is add, then it is called with the plugin when invoked on a page
+ *  if $op is info, then it needs to return an associative array of defined plugins:
+ *    'name' => name of the plugin
+ *    'description' => description of the plugin
+ *    'files' => array(
+ *      'js' => array(
+ *        an array of js files to be loaded on the page
+ *      ),
+ *      'css' => array(
+ *        an array of css files to be loaded on the page
+ *      ),
+ *    ),
+ *
+ *  individual plugins may be disabled by the admin at /admin/settings/jq
+ */
+function jq_add($plugin) {
+  $extra = func_get_args();
+  array_shift($extra);
+  return _jq_add($plugin, $extra);
+}
+
+function _jq_add($plugin, $extra = array(), $cached = TRUE, $display_errors = FALSE, $log_errors = TRUE) {
+  static $invoked_plugins, $errors;
+  $jq = jq_plugins($plugin, $cached, $display_errors);
+  if (!isset($invoked_plugins[$plugin])) {
+    if (isset($plugin) && isset($jq)) {
+      if (!variable_get('jq_allow_' . $plugin, TRUE)) {
+        $error = t('The %plugin jQuery plugin has been disabled.', array('%plugin' => $plugin));
+        if ($log_errors) {
+          watchdog('jq', $error, WATCHDOG_NOTICE);
+        }
+        if ($display_errors) {
+          drupal_set_message($error, 'error');
+        }
+        $invoked_plugins[$plugin] = FALSE;
+      }
+      else {
+        if (is_array($jq['files']['js'])) {
+          foreach ($jq['files']['js'] as $file) {
+            drupal_add_js($file);
+          }
+        }
+        if (is_array($jq['files']['css'])) {
+          foreach ($jq['files']['css'] as $file) {
+            drupal_add_css($file);
+          }
+        }
+        $invoked_plugins[$plugin] = TRUE;
+      }
+    }
+    else {
+      // log & display an error, but only if we haven't already. don't want to overwhelm with a lot of identical errors per page
+      $error = t('The %plugin jQuery plugin is not defined.', array('%plugin' => $plugin));
+      if ($log_errors) {
+        watchdog('jq', $error, WATCHDOG_ERROR);
+      }
+      if ($display_errors) {
+        drupal_set_message($error, 'error');
+      }
+      $invoked_plugins[$plugin] = FALSE;
+    }
+  }
+  if ($invoked_plugins[$plugin]) {
+    $args = array('add', $plugin);
+    $args = array_merge($args, (array)$extra);
+    $function = $jq['module'] .'_jq';
+    call_user_func_array($function, $args);
+  }
+  return $invoked_plugins[$plugin];
+}
+
+/**
+ *  returns all module defined plugins that are registered using hook_jq
+ *  this is cached, so a module is responsible for calling this on installation
+ */
+function jq_plugins($plugin = NULL, $cached = TRUE, $display_errors = FALSE, $log_errors = TRUE) {
+  static $plugins;
+  if (!isset($plugins) || !$cached) {
+    if ($cached && $cache = cache_get('jq_plugins', 'cache')) {
+      $plugins = unserialize($cache->data);
+    }
+    else {
+      $plugins = _jq_plugins($display_errors);
+      cache_set('jq_plugins', 'cache', serialize($plugins));
+    }
+  }
+  if (isset($plugin)) {
+    return $plugins[$plugin];
+  }
+  return $plugins;
+}
+
+function _jq_plugins($display_errors = FALSE, $log_errors = TRUE) {
+  $plugins = array();
+  foreach (module_implements('jq') as $module) {
+    $mod_jq = module_invoke($module, 'jq', 'info');
+    if (is_array($mod_jq)) {
+      foreach ($mod_jq as $key => $plugin) {
+        if (isset($plugins[$key])) {
+          $error = t('There is a conflict with the %plugin jQuery plugin. It is defined by both the %module1 and %module2 modules.', array('%plugin' => $key, '%module1' => $plugins[$key]['module'], '%module2' => $module));
+          if ($log_errors) {
+            watchdog('jq', $error, WATCHDOG_WARNING);
+          }
+          if ($display_errors) {
+            drupal_set_message($error, 'error');
+          }
+        }
+        else {
+          $plugins[$key] = $plugin;
+          $plugins[$key]['plugin'] = $key;
+          $plugins[$key]['module'] = $module;
+        }
+      }
+    }
+  }
+  ksort($plugins);
+  return $plugins;
+}

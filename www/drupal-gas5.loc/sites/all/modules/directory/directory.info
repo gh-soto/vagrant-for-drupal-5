@@ -1,0 +1,11 @@
+; $Id: directory.info,v 1.1.2.1 2007/05/17 10:19:40 augustin Exp $
+name = Directory
+description = Create a directory of resources based on taxonomy.
+dependencies = taxonomy
+version = VERSION
+
+; Information added by drupal.org packaging script on 2007-07-16
+version = "5.x-2.0"
+project = "directory"
+datestamp = "1184579102"
+

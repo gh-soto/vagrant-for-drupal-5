@@ -1,0 +1,420 @@
+<?php
+// $Id: popup_filter.module,v 1.2 2009/02/08 01:22:21 theskp Exp $
+
+
+/* ------------------------------------------------------ Hook implementation */
+
+
+
+function popup_filter_menu($may_cache){
+  $path = drupal_get_path('module', 'popup_filter');
+  drupal_add_css($path.'/popup.css');
+  drupal_add_js($path.'/popup.js');
+}
+
+
+
+/**
+ * Implementation of hook_filter
+ */
+function popup_filter_filter($op, $delta =  0, $format = -1, $text = ''){
+  switch($op) {
+    case 'list':
+      return array(t('Popup content filter'));
+
+    case 'description':
+      return t('Replaces [popup] tags with popup content');
+
+    case 'settings':
+      break;
+
+    case 'no cache':
+      return TRUE;
+
+    case 'prepare':
+      return $text;
+
+    case 'process':
+      return popup_filter_process_text($text);
+
+    default:
+      return $text;
+  }
+}
+
+
+
+function popup_filter_filter_tips($delta, $format, $long = FALSE) {
+  return '[popup] tags are converted into popup content';
+}
+
+
+
+/* ----------------------------------------------------------- Themeing hooks */
+
+
+
+function theme_popup_element_title($title, $link = FALSE, $class = FALSE){
+  
+  if (($link == $_GET['q']) || ($link == '<front>' && drupal_is_front_page())) {
+    if ($class) {
+      $class .= ' active';
+    }
+    else {
+      $class = 'active';
+    }
+  }
+  
+  if ($link) {
+    
+    $link = drupal_get_path_alias($link);
+    
+    if ($link == '<front>'){
+      $link = '/';
+    } else {
+      $link = substr($link, 0, 1) == '/' 
+        ? $link 
+        : '/'.$link;
+    }
+    
+    $href = 'href="'.$link.'"';
+    
+  } else { 
+    $href = 'NOHREF';
+  }
+  
+  $span_class = 
+    ereg_replace('[\ ]+', '-', 
+      ereg_replace('[^a-z0-9\ \-]*', '', 
+        strtolower(
+          trim(
+            htmlspecialchars_decode($title, ENT_QUOTES)
+          )
+        )
+      )
+    );
+  
+  return 
+    '<div class="popup-title'.($class ? ' '.$class : '').'">
+      <a class="popup-title'.($class ? ' '.$class : '').'" '.$href.'>
+        <span class="'.$span_class.'">'.$title.'</span>
+      </a>
+    </div>';
+}
+
+
+
+function theme_popup_element_body($body, $effect, $class){
+
+  $classes = array(
+    'popup-body',
+    'popup-'.$effect,
+  );
+  if ($class){ $classes[] = $class;}
+
+  return '<div class="popup-positioner"><div class="'.implode(' ', $classes).'">'.$body.'</div></div>';
+}
+
+
+
+function theme_popup_element($index, $popup){
+  
+  if ($popup['flat']){
+    $title = '';
+    $body = $popup['body'];  
+  } else {
+    $title_class = $popup['title-class']
+      ? $popup['title-class'] 
+      : $popup['class'];
+    $body_class = $popup['body-class']
+      ? $popup['body-class'] 
+      : $popup['class'];
+      
+    $title = theme('popup_element_title', $popup['title'], $popup['link'], $title_class);
+    $body = $popup['body'] ? theme('popup_element_body', $popup['body'], $popup['effect'], $body_class) : FALSE;
+  }
+
+  $id = $popup['id']
+    ? 'id="'.$popup['id'].'"'
+    : 'id="popup-'.$index.'"';
+  
+  $classes = array(
+    'popup',
+    $popup['class'],
+  );
+ 
+  if ($popup['activate']){ $classes[] = 'popup-'.$popup['activate'];}
+  if ($body) {
+    if ($popup['origin']){ $classes[] = 'popup-origin-'.$popup['origin'];}    
+    if ($popup['expand']){ $classes[] = 'popup-expand-'.$popup['expand'];}
+  }
+
+  return
+    '<div '.$id.' class="'.implode(' ', $classes).'">'.
+      $title.
+      $body.
+    '</div>';
+}
+
+
+
+/* ----------------------------------------------------- Processing functions */
+
+
+
+function popup_filter_process_text($text){
+  $pattern = '\[popup[^\[]+\]';
+
+  static $index = 0;
+  
+  $search_results = array();
+  while(eregi($pattern, $text, $search_results)){
+    $text= str_ireplace($search_results[0], _process_tag($index, $search_results[0]), $text);
+    $index++;
+  }
+
+  return $text;
+}
+
+
+
+function _process_tag($index, $tag){
+  $attributes = _tag_attributes($tag);
+
+  switch(TRUE){
+    case $attributes['text']:
+      $popup = _popup_text($attributes);
+    break;
+    case $attributes['node']:
+      $popup = _popup_node($attributes);
+    break;
+    case $attributes['block']:
+      $popup = _popup_block($attributes);
+    break;
+    case $attributes['form']:
+      $popup = _popup_form($attributes);
+    break;
+    case $attributes['view']:
+      if (module_exists('views')) {
+        $popup = _popup_view($attributes);
+      }
+    break;
+    case $attributes['menu']:
+      $popup = _popup_menu($attributes);
+    break;
+    case $attributes['php']:
+      $popup = _popup_php($attributes);
+    break;
+  }
+
+  $link = $attributes['link'];
+  $alias = drupal_get_path_alias($link);
+
+  $common = array(
+    'expand' => $attributes['expand'] ? $attributes['expand'] : 'bottom-right',
+    'origin' => $attributes['origin'] ? $attributes['origin'] : 'top-left',
+    'activate' => $attributes['activate'],
+    'effect' => $attributes['effect'],
+    'flat' => $attributes['flat'],
+    'id' => $attributes['id'],
+    'activate' => $attributes['activate'] ? $attributes['activate'] : 'hover',
+    'link' => ($activate == 'click' ? FALSE : ($alias ? $alias : $link)), 
+  ); 
+
+  if (is_array($popup)){
+    return theme('popup_element', $index, array_merge($common, $popup));
+  } else {
+    return $popup;
+  }
+}
+
+
+
+/* ---------------------------------------------------------- Content loaders */
+
+
+
+function _popup_text($attributes){
+  return array(
+    'title' => ($attributes['title'] ?  $attributes['title'] : 'Text'),
+    'body' => $attributes['text'],
+  );  
+}
+
+
+
+function _popup_node($attributes){
+  $node = node_load($attributes['node']);
+  $body = node_view($node, !is_null($attributes['teaser']), !is_null($attributes['page']));
+  
+  return array(
+    'title' => ($attributes['title'] ?  $attributes['title'] : $node->title),
+    'body' => $body,
+  );  
+}
+
+
+
+function _popup_block($attributes){
+  $block = block_box_get($attributes['block']);
+  $title = $attributes['title'] ?  $attributes['title'] : $block['info'];
+  $body = $block['body'];
+  
+  return array(
+    'title' => $title,
+    'body' => $body,
+  );
+}
+
+
+
+function _popup_form($attributes){
+  $title = $attributes['title'] ?  $attributes['title'] : 'form';
+  $body = drupal_get_form($attributes['form']);
+  
+  return array(
+    'title' => $title,
+    'body' => $body,
+  );
+}
+
+
+
+function _popup_view($attributes){
+  $view = views_get_view($attributes['view']);
+  $type = $attributes['type'] ? $attributes['type'] : 'block';
+  $nodes = $attributes['nodes'] ? $attributes['nodes'] : '5';
+
+  $title = $attributes['title'] ?  $attributes['title'] : $view->description;
+  $body = views_build_view($type, $view, array(), false, $nodes);
+
+  return array(
+    'title' => $title,
+    'body' => $body,
+  );
+}
+
+
+
+function _popup_menu($attributes){
+  
+  static $menu_index = 0;
+  
+  $entireMenu = menu_get_menu();
+  $visibleMenu = $entireMenu['visible'];
+
+  $depth = $attributes['depth'] ? $attributes['depth'] : 10;
+  $id = $attributes['menu'] ? $attributes['menu'] : $index;
+  
+  $attributes['origin'] = $attributes['origin'] ? $attributes['origin'] : 'top-right';
+  $attributes['expand'] = $attributes['expand'] ? $attributes['expand'] : 'bottom-right';
+
+  $menu = _build_menu($visibleMenu, $id, $menu_index, $depth, $attributes);
+  $menu['class'] = $attributes['flat'] ? 'popup-menu-container' : 'popup-menu';
+  
+  if ($menu['body'] && !$attributes['flat']){
+    $menu['class'] .= ' popup-sub-menu';
+  }
+
+  $menu_index++;
+  
+  return $menu;
+}
+
+
+
+function _popup_php($attributes){
+  return array(
+    'title' => ($attributes['title'] ?  $attributes['title'] : 'php'),
+    'body' => eval($attributes['php']),
+  );  
+}
+
+
+
+/* -------------------------------------------------------- Utility functions */
+
+
+
+function _build_menu($visibleMenu, $id, $menu_index, $current_ceiling, $attributes){
+
+  $menu = $visibleMenu[$id];
+  
+  $depth = $attributes['depth'] ? $attributes['depth'] : 10;
+  $current_depth = $depth - $current_ceiling;
+  $top_level = (
+    $attributes['flat']
+      ? $current_depth == 1
+      : $current_depth == 0
+  );
+  
+  $popup = array();
+  $popup['title'] = $menu['title'];
+  $popup['body'] = '';
+  
+  $popup['class'] = 
+    ($menu['children'] ? 'popup-menu' : 'popup-menu-leaf').
+    ($top_level ? ' popup-top-level' : ($attributes['flat'] ? '' : ' popup-sub-level'));
+  $popup['body-class'] = 
+    ($menu['children'] ? 'popup-menu-body' : 'popup-leaf-body').
+    ($top_level ? ' popup-top-level-body' : ($attributes['flat'] ? '' : ' popup-sub-level-body'));
+  $popup['title-class'] = 
+    ($menu['children'] ? 'popup-menu-title' : 'popup-leaf-title').
+    ($top_level ? ' popup-top-level-title' : ($attributes['flat'] ? '' : ' popup-sub-level-title'));
+
+  // Positioning & animation
+  if ($attributes['origin']){
+    $popup['origin'] = $attributes['origin'];
+  }
+  if ($attributes['expand']){
+    $popup['expand'] = $attributes['expand'];
+  }
+  if ($attributes['effect']){
+    $popup['effect'] = $attributes['effect'];
+  }
+  
+  if ($current_ceiling > 0 && $menu['children']){
+
+    // If we don't have to click to show this items's submenu, make it a link
+    if ($attributes['activate'] != 'click'){
+      $popup['link'] = $menu['path'];
+    }
+    
+    // Add the item's themed children
+    foreach($menu['children'] as $index=>$childId){
+      $popup['body'] .= theme('popup_element', 'menu-'.$id.'-'.$menu_index.'-'.$index, _build_menu($visibleMenu, $childId, $menu_index, $current_ceiling - 1, $attributes)); 
+    }
+  } else {
+    // If the item is a leaf, make it a link
+    $popup['link'] = $menu['path'];
+  }
+
+  return $popup;
+}
+
+
+
+function _tag_attributes($tag){
+  $attributes = array();
+  $inner = ereg_replace('\ ?\=\ ?', '=', trim(substr($tag, 6, strlen($tag) - 7)));
+
+  $attribPattern = 
+    '([^\ ]*=[\"][^\"]+[\"])|'. // xx-_.01="..."
+    '([^\ ]*=[\'][^\']+[\'])|'. // xx-_.01='...'
+    '([^\ ]*=[0-9]*)|'.         // xx-_.01=0123
+    '([^\ ]*=[^\ ]*)|'.         // xx-_.01=xx-_.01
+    '[\ ][^\ \=]+[\ ]|'.        // xx-_.01
+    '[\ ][^\ \=]+$';            // xx-_.01]
+  while (ereg($attribPattern, $inner, $result)){
+    $found = split('=', $result[0]);
+    $inner = str_replace($result[0], '', $inner);
+    
+    $attribute = trim($found[0]); 
+    $value = ereg_replace('^[\'\"]|[\'\"]$', '', trim($found[1]));
+    
+    $attributes[$attribute] = $value
+      ? $value
+      : 1;
+  }
+  return $attributes;
+}

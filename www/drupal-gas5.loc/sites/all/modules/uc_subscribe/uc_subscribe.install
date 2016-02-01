@@ -1,0 +1,52 @@
+<?php
+// $Id$
+
+function uc_subscribe_install() {
+  switch ($GLOBALS['db_type']) {
+    case 'mysqli':
+    case 'mysql':
+      db_query("CREATE TABLE {uc_subscriptions} (
+        sid int NOT NULL,
+        uid int NOT NULL,
+        order_product_id int NOT NULL,
+        tstart int unsigned NOT NULL,
+        texpire int unsigned NOT NULL,
+        trenew int unsigned NOT NULL,
+        tnotify int unsigned NOT NULL,
+        options text,
+        PRIMARY KEY (sid)
+      ) /*!40100 DEFAULT CHARACTER SET UTF8*/");
+      break;
+
+    case 'pgsql':
+      db_query("CREATE TABLE {uc_subscriptions} (
+        sid integer NOT NULL,
+        uid integer NOT NULL,
+        order_product_id integer NOT NULL,
+        tstart bigint NOT NULL,
+        texpire bigint NOT NULL,
+        trenew bigint NOT NULL,
+        tnotify bigint NOT NULL,
+        options text
+      )");
+      db_query("CREATE INDEX {uc_subscriptions}_sid ON {uc_subscriptions} (sid)");
+      db_query("CREATE SEQUENCE {uc_subscriptions}_sid_seq INCREMENT 1 START 1");
+      break;
+
+    default:
+      drupal_set_message(t('Database %name is not supported.', array('%name', $GLOBALS['db_type'])), 'error');
+  }
+}
+
+function uc_subscribe_uninstall() {
+  db_query("DROP TABLE IF EXISTS {uc_subscriptions}");
+}
+
+function uc_subscribe_update_1() {
+  $ret = array();
+  if ($GLOBALS['db_type'] == 'pgsql') {
+    $ret[] = update_sql("CREATE SEQUENCE {uc_subscriptions}_sid_seq INCREMENT 1 START 1");
+  }
+  return $ret;
+}
+

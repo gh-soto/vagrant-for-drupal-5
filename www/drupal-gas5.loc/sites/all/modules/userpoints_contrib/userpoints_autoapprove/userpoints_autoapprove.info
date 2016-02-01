@@ -1,0 +1,11 @@
+; $Id: userpoints_autoapprove.info,v 1.1.2.1 2007/06/18 23:07:12 dww Exp $
+name = Userpoints Autoapprove
+description = Automatically approves outstanding transactions after a chosen period
+package = Userpoints
+dependencies = userpoints
+
+; Information added by drupal.org packaging script on 2007-12-27
+version = "5.x-2.0"
+project = "userpoints_contrib"
+datestamp = "1198796108"
+

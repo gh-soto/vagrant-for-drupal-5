@@ -1,0 +1,55 @@
+<?php
+// $Id$
+
+/**
+ * Ubercart uc_wishlist.module schema
+ */
+function uc_wishlist_install() {
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+      db_query("CREATE TABLE {uc_wishlists} (
+        wid int(10) PRIMARY KEY NOT NULL default '0',
+        uid text,
+        title text,
+        date int(11) NOT NULL default '0',
+        address text
+      ) /*!40100 DEFAULT CHARACTER SET UTF8 */");
+      db_query("CREATE TABLE {uc_wishlist_products} (
+        wpid int(10) PRIMARY KEY NOT NULL default '0',
+        wid int(10) NOT NULL default '0',
+        nid int(10) NOT NULL default '0',
+        qty int(10) NOT NULL default '0',
+        changed int(11) NOT NULL default '0',
+        data text,
+        purchase text
+      ) /*!40100 DEFAULT CHARACTER SET UTF8 */");
+      break;
+    case 'pgsql':
+// TODO: my pgsql needs some checking
+      db_query("CREATE TABLE {uc_wishlists} (
+        wid integer NOT NULL default 0,
+        uid text,
+        title text,
+        date integer NOT NULL default 0,
+        address text
+      )");
+      db_query("CREATE INDEX {uc_wishlists}_wid ON {uc_wishlists} (wid)");
+      db_query("CREATE TABLE {uc_wishlist_products} (
+        wpid integer NOT NULL default 0,
+        wid integer NOT NULL default 0,
+        nid integer NOT NULL default 0,
+        qty integer NOT NULL default 0,
+        changed integer NOT NULL default 0,
+        data text,
+        purchase text
+      )");
+      db_query("CREATE INDEX {uc_wishlist_products}_wpid ON {uc_wishlist_products} (wpid)");
+      break;
+  }
+}
+
+function uc_wishlist_uninstall() {
+  db_query("DROP TABLE IF EXISTS {uc_wishlists}");
+  db_query("DROP TABLE IF EXISTS {uc_wishlist_products}");
+}

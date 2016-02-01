@@ -1,0 +1,227 @@
+<?php
+// $Id: jquery_cookie.module,v 1.2 2008/02/14 05:23:14 redbox2000drupalorg Exp $
+
+/**
+ * @file
+ * The 'jquery_cookie' module is a Drupal module wrapper for the 'Cookie'
+ * jQuery plug-in by Klaus Hartl. This plug-in makes it possible to create a
+ * cookie with the given name and value and other optional parameters.
+ *
+ * @see
+ * http://www.stilbuero.de/2006/09/17/cookie-plugin-for-jquery/ for more information.
+ *
+ * @example
+ * For examples on how to use this plug-in please refer to 'jquery.cookie.js' file.
+ *
+ *
+ * ------------------------
+ * Drupal Module Wrapper
+ * ------------------------
+ *
+ * This wrapper module supports all settings and attributes of the original
+ * jQuery plug-in.
+ *
+ * @copyright  (c) 2007 Martin Lanser
+ * @author     Martin Lanser (redbox2000@optonline.net
+ * @license    Released under GNU/GPL License [ http://www.gnu.org/copyleft/gpl.html ]
+ */
+
+
+/** ============================================================================
+ *                              C O N S T A N T S
+ *  ============================================================================
+ */
+
+// Define thingamajig name
+define('JQRY_COOKIE',      'Cookie');
+define('JQRY_COOKIE_AUTO', TRUE); // If TRUE then JS is loaded via hook_menu()
+
+define('JQRY_COOKIE_DEMO', TRUE); // Should be set to FALSE on production systems
+
+
+
+/** ============================================================================
+ *        D R U P A L   H O O K S   &   R E L A T E D   F U N C T I O N S
+ *  ============================================================================
+ */
+
+/**
+ * Implementation of hook_menu().
+ */
+function jquery_cookie_menu($may_cache) {
+
+  $items = array();
+
+  if ($may_cache) {
+    $items[] = array(
+      'path' => 'admin/settings/jquery_cookie',
+      'title' => t('jQuery Cookie Settings'),
+      'description' => t("Configure the '%PLUG' jQuery plug-in", array('%PLUG' => JQRY_COOKIE)),
+      'callback' => 'drupal_get_form',
+      'callback arguments' => 'jquery_cookie_settings_form',
+      'access' => user_access('administer site configuration'),
+      'type' => MENU_NORMAL_ITEM,
+      );
+  }
+  elseif (JQRY_COOKIE_AUTO) {
+    // Call our magic initialization function. Please note that we _cannot_ 
+    // call this function '..._init()' as it would be called when Drupal loads 
+    // all 'init' hooks.
+    jquery_cookie_initialize();
+  }
+
+  return $items;
+}
+
+
+/**
+ * SETTINGS form
+ */
+function jquery_cookie_settings_form() {
+
+  $form['jquery_cookie_compressed'] = array(
+    '#type' => 'checkbox',
+    '#title' => t("Load compressed Javascript code"),
+    '#default_value' => variable_get('jquery_cookie_compressed', 1),
+    '#description' => t("Define whether to load compressed version of Javascript code."),
+    '#disabled' => FALSE,
+  );
+
+  return system_settings_form($form);
+}
+
+
+/**
+ * Load required Javascript file.
+ */
+function jquery_cookie_initialize($load = '') {
+
+  static $loaded = FALSE;
+
+  if ($loaded) return;
+
+  switch ($load) {
+    case 'compressed': $compressed = 1; break;
+    case 'normal':     $compressed = 0; break;
+    default:           $compressed = variable_get('jquery_cookie_compressed', 1); break;
+  }
+
+  $js_version = ($compressed) ? 'jquery.cookie.compressed.js' : 'jquery.cookie.js';
+  $module_dir = drupal_get_path('module', 'jquery_cookie');
+
+  drupal_add_js($module_dir .'/'. $js_version);
+
+  $loaded = TRUE;
+}
+
+
+
+/** ============================================================================
+ *                   T E S T   F u n c t i o n s   &   F o r m s
+ *  ============================================================================
+ */
+
+/**
+ * Implementation of hook_block().
+ * 
+ * This block is designed for demo purposes only.
+ */
+function jquery_cookie_block($op = 'list', $delta = 0) {
+  
+  switch ($op) {
+    case 'list':
+      $block[0]['info'] = t('jQuery Cookie Test');
+      return $block;
+      break;
+      
+    case 'view':
+      $block['subject'] = t('jQuery Cookie Test');
+      $block['content'] = jquery_cookie_test();
+      
+      return $block;
+      break;
+  }
+}
+
+
+
+/**
+ * Callback function to display jQuery Heartbeat Test screen
+ *
+ * @return STRING
+ */
+function jquery_cookie_test() {
+
+  // Create buttons and JS calls
+  $btns = array(
+    'demo1' => array('id' => 'cookie_demo1', 'label' => t('Set cookie %COOKIE by # DAYS (10 days)', array('%COOKIE' => 'ONE'))),
+    'demo2' => array('id' => 'cookie_demo2', 'label' => t('Set cookie %COOKIE by DATE (3 days)', array('%COOKIE' => 'ONE'))),
+    'demo3' => array('id' => 'cookie_demo3', 'label' => t('Get cookie %COOKIE', array('%COOKIE' => 'ONE'))),
+    'demo4' => array('id' => 'cookie_demo4', 'label' => t('Delete cookie %COOKIE', array('%COOKIE' => 'ONE'))),
+    'demo5' => array('id' => 'cookie_demo5', 'label' => t('Set cookie %COOKIE', array('%COOKIE' => 'TWO'))),
+    'demo6' => array('id' => 'cookie_demo6', 'label' => t('Get cookie %COOKIE', array('%COOKIE' => 'TWO'))),
+    'demo7' => array('id' => 'cookie_demo7', 'label' => t('Delete cookie %COOKIE', array('%COOKIE' => 'TWO'))),
+  );
+  
+  $msg_empty = t('... empty ...');
+  $msg_content = t('Content: ');
+  
+  $js = "$(document).ready(function() { \n"
+      . "var COOKIE_ONE = 'jquery_cookie_one'; \n"
+      . "var COOKIE_TWO = 'jquery_cookie_two'; \n"
+      . "var sTmp; \n"
+
+      . "sTmp = $.cookie(COOKIE_ONE); "
+      . "$('#cookie-one').html((sTmp) ? sTmp : '<em>{$msg_empty}<\/em>'); \n"
+      
+      . "sTmp = $.cookie(COOKIE_TWO); "
+      . "$('#cookie-two').html((sTmp) ? sTmp : '<em>{$msg_empty}<\/em>'); \n"
+
+      . "$('#{$btns['demo1']['id']}').click(function() { "
+      .   "$.cookie(COOKIE_ONE, '10-day test', { path: '/', expires: 10 }); "
+      .   "$('#cookie-one').html($.cookie(COOKIE_ONE)); "
+      .   "return false; "
+      . "}); \n"
+      . "$('#{$btns['demo2']['id']}').click(function() { "
+      .   "var date = new Date(); "
+      .   "date.setTime(date.getTime() + (3 * 24 * 3600 * 1000)); "
+      .   "$.cookie(COOKIE_ONE, '3-day test', { path: '/', expires: date }); "
+      .   "$('#cookie-one').html($.cookie(COOKIE_ONE)); "
+      .   "return false; "
+      . "}); \n"
+      . "$('#{$btns['demo3']['id']}').click(function() { alert('{$msg_content}'+ $.cookie(COOKIE_ONE)); return false; }); \n"
+      . "$('#{$btns['demo4']['id']}').click(function() { "
+      .   "$.cookie(COOKIE_ONE, null, { "
+      .   "path: '/' }); "
+      .   "$('#cookie-one').html('<em>{$msg_empty}<\/em>'); "
+      .   "return false; "
+      . "}); \n"
+      
+      . "$('#{$btns['demo5']['id']}').click(function() { "
+      .   "$.cookie(COOKIE_TWO, '5-day test', { expires: 5 }); "
+      .   "$('#cookie-two').html($.cookie(COOKIE_TWO)); "
+      .   "return false; "
+      . "}); \n"
+      . "$('#{$btns['demo6']['id']}').click(function() { alert('{$msg_content}'+ $.cookie(COOKIE_TWO)); return false; }); \n"
+      . "$('#{$btns['demo7']['id']}').click(function() { "
+      .   "$.cookie(COOKIE_TWO, null); "
+      .   "$('#cookie-two').html('<em>{$msg_empty}<\/em>'); "
+      .   "return false; "
+      . "}); \n"
+      
+      . "});";
+
+  drupal_add_js($js, 'inline');
+    
+  $output  = "<ul id=\"cookie-demo-btns\" class=\"menu\">"
+           . "<li id=\"{$btns['demo1']['id']}\" class=\"leaf\">{$btns['demo1']['label']}</li>"
+           . "<li id=\"{$btns['demo2']['id']}\" class=\"leaf\">{$btns['demo2']['label']}</li>"
+           . "<li id=\"{$btns['demo3']['id']}\" class=\"leaf\">{$btns['demo3']['label']}</li>"
+           . "<li id=\"{$btns['demo4']['id']}\" class=\"leaf\">{$btns['demo4']['label']}</li>"
+           . "<li id=\"{$btns['demo5']['id']}\" class=\"leaf\">{$btns['demo5']['label']}</li>"
+           . "<li id=\"{$btns['demo6']['id']}\" class=\"leaf\">{$btns['demo6']['label']}</li>"
+           . "<li id=\"{$btns['demo7']['id']}\" class=\"leaf\">{$btns['demo7']['label']}</li>"
+           . "</ul>";
+
+  return $output;
+}

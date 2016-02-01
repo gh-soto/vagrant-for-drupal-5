@@ -1,0 +1,4 @@
+; $Id$
+name = Ad Manager
+description = Allows Ad Manager to work
+version = "1.x.dev"

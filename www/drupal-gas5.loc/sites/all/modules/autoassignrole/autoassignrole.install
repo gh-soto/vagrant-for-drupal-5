@@ -1,0 +1,10 @@
+<?php
+/**
+ * Implementation of hook_uninstall().
+ */
+function autoassignrole_uninstall() {
+	$vars = db_query("select name from variable where name like 'AUTOASSIGNROLE_%%'");
+	while ($var = db_fetch_object($vars)) {
+		variable_del($var->name);
+	}
+}

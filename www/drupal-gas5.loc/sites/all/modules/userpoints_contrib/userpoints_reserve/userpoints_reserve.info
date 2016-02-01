@@ -1,0 +1,9 @@
+name = Userpoints Reserve
+description = Automatically set Ecommerce exchange rate based on a cash reserve.
+package = Userpoints
+dependencies = userpoints userpoints_ecommerce
+; Information added by drupal.org packaging script on 2007-12-27
+version = "5.x-2.0"
+project = "userpoints_contrib"
+datestamp = "1198796108"
+

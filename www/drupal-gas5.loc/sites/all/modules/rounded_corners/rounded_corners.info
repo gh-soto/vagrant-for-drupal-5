@@ -1,0 +1,9 @@
+; $Id $
+name = Rounded corners
+description = "Enables rounded corners with JQuery"
+
+; Information added by drupal.org packaging script on 2007-06-19
+version = "5.x-1.x-dev"
+project = "rounded_corners"
+datestamp = "1182212563"
+

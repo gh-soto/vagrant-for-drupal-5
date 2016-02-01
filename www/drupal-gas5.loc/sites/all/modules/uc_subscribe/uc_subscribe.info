@@ -1,0 +1,6 @@
+; $Id$
+name = Subscriptions
+description = Provides support for subscriptions and recurring payments.
+dependencies = uc_cart uc_order uc_product uc_store uc_attribute
+package = Ubercart - extra
+version = 2008-04-11

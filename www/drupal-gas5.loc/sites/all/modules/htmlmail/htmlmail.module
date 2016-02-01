@@ -1,0 +1,273 @@
+<?php
+// $Id: htmlmail.module,v 1.9.4.6 2009/07/20 02:45:29 chrisherberte Exp $
+
+/**
+ * @file
+ * Send system emails in HTML
+ */
+
+/**
+ * Implementation of hook_help().
+ */
+function htmlmail_help($section='') {
+  switch ($section) {
+    case 'admin/help#htmlmail':
+    case 'admin/settings/htmlmail':
+      $output = '<p>'.  t("HTML Mail provides formatting and semantic markup capabilities in e-mail that are not available with plain text. All system emails are effected if this module is enabled. Additional HTML Mail templates, ie: <strong>htmlmail-<em>name</em>.tpl.php</strong> will be detected if present anywhere under the current theme directory.") .'</p>';
+  }
+  return $output;
+}
+
+/**
+ * Implementation of hook_menu().
+ */
+function htmlmail_menu() {
+  $items = array();
+  $items[] = array(
+    'path' => 'admin/settings/htmlmail',
+    'title' => t('HTML Mail'),
+    'callback' => 'drupal_get_form',
+    'callback arguments' => 'htmlmail_admin_settings',
+    'description' => t('Configure HTML Mail system-wide settings.'),
+    'access' => user_access('access administration pages')
+  );
+  $items[] = array(
+    'path' => 'admin/settings/htmlmail/settings',
+    'title' => t('Settings'),
+    'callback' => 'drupal_get_form',
+    'callback arguments' => 'htmlmail_admin',
+    'access' => user_access('access administration pages'),
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => '-2'
+  );
+  $items[] = array(
+    'path' => 'admin/settings/htmlmail/template',
+    'title' => t('Template'),
+    'callback' => 'drupal_get_form',
+    'callback arguments' => array('htmlmail_template_settings'),
+    'type' => MENU_LOCAL_TASK,
+    'access' => user_access('access administration pages'),
+    'weight' => '-1',
+  );
+  $items[] = array(
+    'path' => 'admin/settings/htmlmail/test',
+    'title' => t('Send Test'),
+    'callback' => 'drupal_get_form',
+    'callback arguments' => array('htmlmail_test_form'),
+    'type' => MENU_LOCAL_TASK,
+    'access' => user_access('access administration pages'),
+  );
+  return $items;
+}
+
+/**
+ * Implementation of hook_mail_alter().
+ */
+function htmlmail_mail_alter($mailkey, &$recipient, &$subject, &$body, &$sender, &$headers) {
+  $headers['Content-Type'] = 'text/html; charset="utf-8"';
+
+  // The paragraph an break stuff
+  if (variable_get('htmlmail_autop', '1') == 1) {
+    $body = _filter_autop($body);
+  }
+
+  if (variable_get('htmlmail_urlfilter', '1') == 1) {
+    // defaults to 72 as there is no filter 0 -- make filters a configuration option?
+    $body = _filter_url($body, 0);
+  }
+
+  // Theme from template htmlmail.tpl.php
+  $body = theme('htmlmail', $body);
+
+  if (variable_get('htmlmail_emogrifier', '0') == 1) {
+    $body = _htmlmail_emogrify($body);
+  }
+  return;
+}
+
+/**
+ * Theme function to load htmlmail.tpl.php
+ */
+function theme_htmlmail($body) {
+  $template = _htmlmail_template('path') .'/'. _htmlmail_template('file');
+  $variables = array(
+    'body' => $body,
+    'path' => url('', NULL, NULL, TRUE) . _htmlmail_template('path'),
+    'header' => variable_get('htmlmail_header', ''),
+    'footer' => variable_get('htmlmail_footer', ''),
+    'css' => variable_get('htmlmail_css', ''),
+  );
+  return _phptemplate_render($template, $variables);
+}
+
+
+function htmlmail_admin_settings() {
+  $form['htmlmail_autop'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Line break converter'),
+    '#default_value' => variable_get('htmlmail_autop', '1'),
+    '#description' => t('Converts line breaks into HTML (i.e. &lt;br&gt; and &lt;p&gt; tags).'),
+  );
+  $form['htmlmail_urlfilter'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('URL Filter'),
+    '#default_value' => variable_get('htmlmail_urlfilter', '1'),
+    '#description' => t('Turns web and e-mail addresses into clickable links. URLs longer than 72 characters will be truncated.'),
+  );
+  $form['htmlmail_emogrifier'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Emogrifier'),
+    '#default_value' => variable_get('htmlmail_emogrifier', '0'),
+    '#description' => t('Insert your CSS definitions as inline styles into HTML tags for Outlook 2007 and Google Gmail.'),
+    '#disabled' => !extension_loaded('dom'),
+  );
+  return system_settings_form($form);
+}
+
+function htmlmail_template_settings() {
+  $form['htmlmail_template'] = array(
+    '#type' => 'select',
+    '#title' => t('Template'),
+    '#default_value' => variable_get('htmlmail_template', ''),
+    '#description' => t('Select from default or HTML Mail templates installed in the current themes\'s directory.'),
+    '#options' => _htmlmail_get_templates(),
+  );
+  $form['htmlmail_header'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Header HTML'),
+    '#default_value' => variable_get('htmlmail_header', ''),
+  );
+  $form['htmlmail_footer'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Footer HTML'),
+    '#default_value' => variable_get('htmlmail_footer', ''),
+  );
+  $form['htmlmail_css'] = array(
+    '#type' => 'textarea',
+    '#title' => t('CSS'),
+    '#default_value' => variable_get('htmlmail_css', ''),
+  );
+  return system_settings_form($form);
+}
+
+function htmlmail_test_form($form_values = NULL) {
+  $defaults = variable_get('htmlmail_test', array());
+  $form['to'] = array(
+    '#type' => 'textfield',
+    '#title' => t('To'),
+    '#default_value' => $defaults['to'],
+    '#maxlength' => 128,
+    '#required' => TRUE,
+  );
+  $form['subject'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Subject'),
+    '#default_value' => $defaults['subject'],
+    '#maxlength' => 128,
+    '#required' => TRUE,
+  );
+  $form['body'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Body'),
+    '#rows' => 20,
+    '#default_value' => $defaults['body'],
+    '#required' => TRUE,
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit'),
+  );
+  return $form;
+}
+
+function htmlmail_test_form_submit($form_id, $form_values) {
+  $defaults = array(
+    'to' => $form_values['to'],
+    'subject' => $form_values['subject'],
+    'body' => $form_values['body']
+  );
+  variable_set('htmlmail_test', $defaults);
+
+  if (drupal_mail('htmlmail-test', $form_values['to'], $form_values['subject'], $form_values['body'], $form_values['to'])) {
+    drupal_set_message('Test mail sent.');
+  }
+  else {
+    drupal_set_message('drupal_mail failed');
+  }
+}
+
+
+/**
+ * If the Emogrifier <http://www.pelagodesign.com/sidecar/emogrifier/> exists,
+ * the CSS styles inside the the $message['body'] are inserted into the other
+ * HTML tags within the same $message['body'] as inline style attributes, 
+ * based on CSS selectors.
+ *
+ * This function is based on code in the simplenews_template module.
+ *
+ * This emogrifier differs from that of simplenews_template in that it permits
+ * modules or users to adjoin CSS into the $message['body'] using the HTML 
+ * <style> tag.  The function searches the entire body for style tags, 
+ * concatenates them in order of appearance in the file, then sends them to
+ * the Emogrifier script. 
+ *
+ * Note that the method modifies the $message['body'] directly, and the 
+ * return value is the modified $message['body'] string as well. 
+ *
+ * @param $message
+ *           The message array to be sent. This function works directly 
+ *           on the $message['body'].
+ * @return $message['body']
+ *           The modified message body string with inlined CSS applied.
+ */
+function _htmlmail_emogrify(&$body) {
+  $path = drupal_get_path('module', 'htmlmail') ."/emogrifier/emogrifier.php";
+  if (is_file($path)) {
+    $style = array();
+    // Pull out the contents of any style tags
+    if (preg_match_all("@<style[^>]*>(.*)</style>@Usi", $body, $matches, PREG_PATTERN_ORDER)) {
+      $style = $matches[1];
+    }
+    // Emogrify can't handle several CSS rules on one line. As a precaution,
+    // we therefore insert LF after each closing bracket.
+    $style = preg_replace('/}\s*/', "}\n", implode("\n", $style));
+
+    // Inline the CSS rules.
+    include_once $path;
+    // get and reset error levels so we dont get DOMDocument::loadHTML() errors
+    $errorlevel = error_reporting();
+    error_reporting(0);
+    $emogrifier = new Emogrifier($body, $style);
+    $body = $emogrifier->emogrify();
+    error_reporting($errorlevel);
+  }
+  return $body;
+}
+
+/**
+ * Scan theme's directory for htmlmail templates: Return array for form select options
+ */
+function _htmlmail_get_templates() {
+  $templates = array('' => 'Use Default');
+  $files = file_scan_directory(path_to_theme(), '^htmlmail-.*\.tpl\.php$');
+  foreach ($files as $file) {
+    $templates[$file->filename] = $file->name;
+  }
+  return $templates;
+}
+
+/**
+ * Build and return template path or filename, module directory if no template selected.
+ */
+function _htmlmail_template($type) {
+  $template = variable_get('htmlmail_template', '');
+  switch ($type) {
+    case 'file':
+      $output = empty($template) ? 'htmlmail.tpl.php' : basename($template);
+      break;
+    case 'path':
+      $output = empty($template) ? drupal_get_path('module', 'htmlmail') : dirname($template);
+      break;
+  }
+  return $output;
+}

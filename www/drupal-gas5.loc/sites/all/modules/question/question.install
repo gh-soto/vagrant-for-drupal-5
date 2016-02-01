@@ -1,0 +1,40 @@
+<?php
+function question_install() {
+  switch ($GLOBALS['db_type']) {
+    case 'mysql':
+    case 'mysqli':
+    case 'pgsql':
+      db_query("CREATE TABLE {question_node} (
+          nid int(10) NOT NULL default '0',
+          questioner varchar(50) NOT NULL default '',
+          quid int(10) NOT NULL default '0',
+          question text NOT NULL,
+          q_format int(4) NOT NULL default '0',
+          answer text NOT NULL,
+          a_format int(4) NOT NULL default '0',
+          PRIMARY KEY  (`nid`)
+          );");
+      db_query("CREATE TABLE {question_queue} (
+          qid int(10) NOT NULL default '0',
+          questioner varchar(50) NOT NULL default '',
+          quid int(10) NOT NULL default '0',
+          question text NOT NULL
+          );");
+      break;
+  }
+}
+
+function question_update_1() {
+  $items = array();
+  $items[] = update_sql("ALTER TABLE {question_node} ADD PRIMARY KEY  (`nid`)");
+  $items[] = update_sql("ALTER TABLE {question_queue} ADD PRIMARY KEY  (`qid`)");
+  return $items;
+}
+
+function question_uninstall() {
+  db_query('DROP TABLE {question_node}');
+  db_query('DROP TABLE {question_queue}');
+  variable_del('question_require_registered');
+  variable_del('question_thanks');
+}
+?>

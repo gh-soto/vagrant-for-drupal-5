@@ -1,0 +1,14 @@
+// $Id: changelog.txt,v 1.6 2008/05/04 19:03:24 aaron Exp $
+
+2008-02-05
+check for module_hook('module', 'jq') before adding hook
+
+2008-02-03
+add support for jquery_form
+
+2008-01-28
+added support for cluetip
+cleaned installation
+
+2008-01-24
+add support for jcarousel

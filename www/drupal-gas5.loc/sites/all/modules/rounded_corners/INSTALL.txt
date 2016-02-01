@@ -1,0 +1,9 @@
+$Id: INSTALL.txt,v 1.1 2007/03/31 10:54:58 forngren Exp $
+Installation instructions for rounded_corners http://drupal.org/rounded_corners
+
+1. Download rounded_corners from http://drupal.org/rounded_corners
+   and extract the contents into your modules folder.
+2. Download jquery.corner.js from http://methvin.com/jquery/jquery.corner.js
+   and place it inside your rounded_corners folder.
+3. Check administer > settings > Rounded corners to see if jquery.corner.js
+   is correctly installed.

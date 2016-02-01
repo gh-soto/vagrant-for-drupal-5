@@ -1,0 +1,10 @@
+; $Id: googlenews.info,v 1.1.4.1 2009/03/07 10:39:17 webopius Exp $
+name = GoogleNews
+description = Generates Google News sitemap
+
+
+; Information added by drupal.org packaging script on 2009-03-07
+version = "5.x-1.0"
+project = "googlenews"
+datestamp = "1236422735"
+

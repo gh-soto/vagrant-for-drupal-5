@@ -1,0 +1,11 @@
+; $Id: userpoints.info,v 1.1.2.6.2.1 2007/10/14 18:29:40 jredding Exp $
+name = Userpoints
+description = Users earn points as they post nodes, comments, and vote on nodes.
+package = Userpoints
+
+
+; Information added by drupal.org packaging script on 2008-03-09
+version = "5.x-3.4"
+project = "userpoints"
+datestamp = "1205022612"
+

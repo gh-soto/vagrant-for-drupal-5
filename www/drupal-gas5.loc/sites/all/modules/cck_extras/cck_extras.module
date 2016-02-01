@@ -1,0 +1,376 @@
+<?php
+// $Id: cck_extras.module,v 1.1.2.7 2007/11/07 22:16:40 eaton Exp $
+
+/**
+ * @file
+ * Defines a few nifty widgets and formatters to enhance various field types.
+ */
+
+
+/**
+ * Implementation of hook_field_formatter_info().
+ */
+function cck_extras_field_formatter_info() {
+  return array(
+    'textarea' => array(
+      'label' => 'Selectable textarea',
+      'field types' => array('text'),
+      'module' => 'cck_extras',
+    ),
+	'code' => array(
+	  'label' => 'Sample PHP Code',
+	  'field types' => array('text'),
+	  'module' => 'cck_extras',
+	),
+    'redirect' => array(
+      'label' => 'Link redirection',
+      'field types' => array('link'),
+      'module' => 'cck_extras',
+    ),
+    '1pixelout' => array(
+      'label' => t('1 Pixel Out player'),
+      'field types' => array('file_audio'),
+      'module' => 'cck_extras',
+    ),
+    'button' => array(
+      'label' => t('Button player'),
+      'field types' => array('file_audio'),
+      'module' => 'cck_extras',
+    ),
+    'link_snappr_tiny' => array(
+      'label' => t('Preview image (tiny)'),
+      'field types' => array('link'),
+      'module' => 'cck_extras',
+    ),
+    'link_snappr_small' => array(
+      'label' => t('Preview image (small)'),
+      'field types' => array('link'),
+      'module' => 'cck_extras',
+    ),
+  );
+}
+
+/**
+ * Implementation of hook_field_formatter().
+ *
+ * The $node argument is necessary so that filter access can be checked on
+ * node preview.
+ */
+function cck_extras_field_formatter($field, $item, $formatter, $node) {
+  switch ($formatter) {
+    case 'textarea':
+      // First, we'll decide whether to make a textfield or a textarea
+      // depending on the number of rows specified in the field's settings.
+      $type = ($field['widget']['rows'] == 1) ? 'textfield' : 'textarea';
+
+      // We keep track of $count so that multi-value fields won't get
+      // duplicate CSS ids when they're output.
+      static $count;
+      $count = isset($count) ? $count : 0;
+
+      $field = array(
+        '#id' => form_clean_id($field['field_name']) .'-view-'. $count++,
+        '#type' => $type,
+        '#value' => $item['value'],
+      );
+      $field += _element_info($type);
+      $output = drupal_render($field);
+      break;
+    case 'code':
+      $output = codefilter_process_code($item['value']);
+      break;
+
+    case 'redirect':
+      if (!empty($item['url'])) {
+        // Have you done something dumb? Are you encountering this redirect on the user login
+        // form or the admin page? We'll try to help you out a bit.
+        if (arg(0) == 'admin' || arg(0) == 'user') {
+          $message  = "You have chosen the Redirect formatter for a Link field in the node %title, ";
+          $message .= "but it appears to be redirecting at inappropriate times. Like, right now. ";
+
+          if ($title = $node->title) {
+            // We're looking at a normal node, and the admin has most likely chosen the 'redirect'
+            // formatter for teaser view that's being displayed in a sidebar block, or something
+            // like that. We'll point them to the CCK content type display settings page.
+            $message .= "Chances are, the formatter was mistakenly chosen for use in the teaser of ";
+            $message .= "a node type that is being displayed in a sidebar block.";
+
+            $subs = array(
+              '%title' => $node->title,
+              '!page' => l(node_get_types('name', $node) .' '. t(' settings form'), "admin/content/types/$node->type/display"),
+            );
+          }
+          else {
+            // We didn't get a fully populated node object, so chances are the admin incorrectly
+            // selected the 'Link redirection' formatter for a Link field in a list view that's
+            // being shown in a sidebar block. Whoops! We'll magically figure out what the active
+            // view is and point them to its edit page.
+            $node = node_load($node->nid);
+            $view = $GLOBALS['current_view'];
+            
+            $message .= "Chances are, the formatter was mistakenly chosen for use in a list view ";
+            $message .= "that is being displayed in a sidebar block.";
+            $subs = array(
+              '%title' => $node->title,
+              '!page' => l(t('configuration page for the !view view', array('!view' => $view->name)), "admin/build/views/$view->name/edit"),
+            );
+          }
+
+          $message .= "\n\nYou should visit the !page and make sure your settings are correct.";
+          drupal_set_message(t($message, $subs), 'warning');
+        }
+        elseif ($node->in_preview) {
+          // If the user is in node preview, we'll actually write out the url with a note that
+          // they'll be redirected. Maybe this should be bold. And flashy.
+          return t("When this node is displayed, the user's browser will be redirected to %url.", array('%url' => $item['url']));
+        }
+        elseif (_cck_extras_backtrace_contains_function('token_get_values')) {
+          // Oh, man. Oh, man oh man. I can't even begin to say how wrong this is.
+          return $item['url'];
+        }
+        else {
+          // Want to do clickthrough tracking? Implement hook_link_clickthrough.
+          module_invoke_all('link_clickthrough', $item['url'], $node);
+          drupal_goto($item['url']);
+        }
+      }
+      break;
+
+    case '1pixelout':
+      global $base_url;
+      if (empty($item['fid'])) {
+        return '';
+      }
+      require_once(drupal_get_path('module', 'audiofield') .'/multimediafile.inc');
+      $file = _field_file_load($item['fid']);
+    
+      $options['soundFile'] = check_url($base_url .'/'. $file['filepath']);
+      $url = $base_url .'/'. drupal_get_path('module', 'cck_extras') .'/1pixelout.swf';
+    
+      $flashvars = array();
+      foreach ($options as $key => $val) {
+        $flashvars[] = rawurlencode($key) .'='. rawurlencode($val);
+      }
+      $flashvars = implode('&amp;', $flashvars);
+
+$output = <<<EOT
+<object type="application/x-shockwave-flash" data="$url" width="290" height="24" >
+  <param name="movie" value="$url" />
+  <param name="wmode" value="transparent" />
+  <param name="menu" value="false" />
+  <param name="quality" value="high" />
+  <param name="FlashVars" value="$flashvars" />
+</object>
+EOT;
+      break;
+
+    case 'button':
+      if (empty($item['fid'])) {
+        return '';
+      }
+      require_once(drupal_get_path('module', 'audiofield') .'/multimediafile.inc');
+      $file = _field_file_load($item['fid']);
+      $options['song_url'] = check_url($base_url .'/'. $file['filepath']);
+      $options['song_title'] = check_plain($file['description']);
+      global $base_url;
+      $url = $base_url .'/'. drupal_get_path('module', 'cck_extras') .'/button.swf?'. drupal_query_string_encode($options);
+
+$output = <<<EOT
+<object type="application/x-shockwave-flash" data="$url" width="17" height="17">';
+  <param name="movie" value="$url" />
+  <param name="wmode" value="transparent" />
+  <param name="quality" value="high" />
+</object>
+EOT;
+      break;
+
+    case 'link_snappr_tiny':
+    case 'link_snappr_small':
+      if (empty($item['url'])) {
+        return '';
+      }
+  
+      $attributes = array();
+      $item['attributes'] = unserialize($item['attributes']);
+      // Add attributes defined at the widget level
+      if (is_array($item['attributes'])) {
+        foreach($item['attributes'] as $attribute => $attbvalue) {
+          if (isset($item['attributes'][$attribute]) && $field['attributes'][$attribute] == 'user') {
+            $attributes[$attribute] = $attbvalue;
+          }
+        }
+      }
+      // Add attributes defined at the field level
+      if (is_array($field['attributes'])) {
+        foreach($field['attributes'] as $attribute => $attbvalue) {
+          if (!empty($attbvalue) && $attbvalue != 'default' && $attbvalue != 'user') {
+            $attributes[$attribute] = $attbvalue;
+          }
+        }
+      }
+  
+      $type = link_validate_url($item['url']);
+      $url = link_cleanup_url($item['url']);
+
+      // Seperate out the anchor if any
+      if (strpos($url, '#') !== FALSE) {
+        $fragment = substr($url, strpos($url, '#') + 1);
+        $url = substr($url, 0, strpos($url, '#'));
+      }
+      // Seperate out the query string if any
+      if (strpos($url, '?') !== FALSE) {
+        $query = substr($url, strpos($url, '?') + 1);
+        $url = substr($url, 0, strpos($url, '?'));
+      }
+
+      $domain = substr($url, strpos($url, ':') + 3);
+      
+      if ($formatter == 'link_snappr_tiny') {
+        $imgpath = "http://images.websnapr.com/?url=". urlencode($domain) ."&size=T";
+        $imgattr = array('height' => 70, 'width' => 92);
+      }
+      else {
+        $imgpath = "http://images.websnapr.com/?url=". urlencode($domain) ."&size=S";
+        $imgattr = array('height' => 152, 'width' => 202);
+      }
+      $image = theme('image', $imgpath, $url, $url, $imgattr, FALSE);
+      
+      $output = l($image, $url, $attributes, $query, $fragment, TRUE, TRUE);
+      break;
+  }
+  return $output;
+}
+
+function _cck_extras_backtrace_contains_function($function = '') {
+  foreach (debug_backtrace() as $step) {
+    if ($step['function'] == $function) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+/**
+ * Implementation of hook_widget_info().
+ */
+function cck_extras_widget_info() {
+  return array(
+    'nodereference_nid' => array(
+      'label' => 'Raw Node ID',
+      'field types' => array('nodereference'),
+      'module' => 'cck_extras',
+    ),
+    'viewfield_defaults' => array(
+      'label' => 'Hidden defaults',
+      'field types' => array('viewfield'),
+      'module' => 'cck_extras',
+    ),
+
+  );
+}
+
+/**
+ * Implementation of hook_widget_settings().
+ */
+function cck_extras_widget_settings($op, $widget) {
+  switch ($field['widget']['type']) {
+    case 'nodereference_nid':
+      break;
+
+    case 'viewfield_defaults':
+      break;
+  }
+}
+
+/**
+ * Implementation of hook_widget().
+ */
+function cck_extras_widget($op, &$node, $field, &$items) {
+  switch ($field['widget']['type']) {
+    case 'nodereference_nid' :
+      switch ($op) {
+        case 'form':
+          $form = array();
+
+          $form[$field['field_name']] = array('#tree' => TRUE);
+
+          if ($field['multiple']) {
+            $form[$field['field_name']]['#type'] = 'fieldset';
+            $form[$field['field_name']]['#description'] = t($field['widget']['description']);
+            $delta = 0;
+            foreach ($items as $data) {
+              if ($data['nid']) {
+                $form[$field['field_name']][$delta]['nid'] = array(
+                  '#type' => 'textfield',
+                  '#title' => ($delta == 0) ? t($field['widget']['label']) : '',
+                  '#default_value' => $data['nid'],
+                  '#required' => ($delta == 0) ? $field['required'] : FALSE,
+                  '#maxlength' => $field['max_length'] ? $field['max_length'] : NULL,
+                  '#weight' => $field['widget']['weight'],
+                );
+                $delta++;
+              }
+            }
+            foreach (range($delta, $delta + 2) as $delta) {
+              $form[$field['field_name']][$delta]['nid'] = array(
+                '#type' => 'textfield',
+                '#title' => ($delta == 0) ? t($field['widget']['label']) : '',
+                '#default_value' => '',
+                '#required' => ($delta == 0) ? $field['required'] : FALSE,
+                '#maxlength' => $field['max_length'] ? $field['max_length'] : NULL,
+                '#weight' => $field['widget']['weight'],
+              );
+            }
+          }
+          else {
+            $form[$field['field_name']][0]['nid'] = array(
+              '#type' => 'textfield',
+              '#title' => t($field['widget']['label']),
+              '#default_value' => isset($items[0]['nid']) ? $items[0]['value'] : '',
+              '#required' => $field['required'],
+              '#description' => t($field['widget']['description']),
+              '#maxlength' => $field['max_length'] ? $field['max_length'] : NULL,
+              '#weight' => $field['widget']['weight'],
+            );
+          }
+          return $form;
+
+        case 'process form values':
+          // Don't save empty fields except the first value
+          foreach ($items as $delta => $item) {
+            if ($item['nid'] == '') {
+              unset($items[$delta]);
+            }
+          }
+          break;
+      }
+      break;
+
+    case 'viewfield_defaults':
+      switch ($op) {
+        case 'form':
+          if (empty($node)) {
+            // We're on the node settings form -- return the normal widget.
+            return viewfield_widget($op, $node, $field, $items);
+          }
+          else {
+            $form = array();
+            $form[$field['field_name']] = array('#tree' => TRUE);
+
+            foreach(explode(',',$items['vnames']) as $i => $vname) {
+              $form[$field['field_name']][$i]['vname'] = array(
+                '#type' => 'hidden',
+                '#value' => $vname,
+              );
+            }
+            $form[$field['field_name']][0]['vargs'] = array(
+              '#type' => 'hidden',
+              '#value' => $items['vargs'],
+            );
+            return $form;
+          }
+          break;
+      }
+      break;
+  }
+}

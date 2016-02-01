@@ -1,0 +1,1937 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Ubercart subscriptions module.
+ *
+ * By Joe Turgeon [http://arithmetric.com]
+ * For Sundays Energy [http://sundaysenergy.com]
+ * Licensed under GPL version 2
+ * Version 2008/04/11
+ *
+ * This module provides support for managing and acting on subscriptions.
+ *
+ * The following hook is provided for integration with uc_subscribe:
+ *
+ * function hook_product_subscribe($op, $data)
+ *   @param $op Operation
+ *     'new':    new subscription is registered
+ *     'notify': subscription has reached the warning threshold
+ *     'renew':  subscription is renewed
+ *     'expire': subscription is expired
+ *   @param $data Subscription and product information
+ *
+ * For an example, see uc_subscribe_product_subscribe below.
+ *
+ */
+
+function uc_subscribe_subscription() {
+  return array(
+    array(
+      'module' => 'uc_subscribe',
+      'title' => t('Generic subscription'),
+      'attributes' => array(),
+    ),
+  );
+}
+
+function uc_subscribe_product_subscribe($op, $data) {
+  $options = uc_subscribe_get_options($data);
+
+  switch ($op) {
+    case 'notify':
+      // perform configured reminder actions
+      $u = user_load(array('uid' => $data->uid));
+      $order_id = $data->order_id;
+      $order = uc_order_load($order_id);
+
+      // send reminder e-mail
+      $remail = $options['reminder_email'];
+      $remailtxt = variable_get('uc_subscribe_reminder_email_text', false);
+      if ($remail && $remailtxt) {
+        $repmtx = array(
+          '[name]' => $u->name,
+          '[uid]' => $u->uid,
+          '[order_id]' => $data->order_id,
+          '[product_title]' => $data->title,
+          '[time_expire]' => format_date($data->texpire, 'small')
+        );
+        $search = array_keys($repmtx);
+        $replace = array_values($repmtx);
+        $message = str_replace($search, $replace, $remailtxt);
+        drupal_mail('uc_subscribe_reminder', $u->mail, t('Reminder notice'), $message);
+      }
+
+      // automatically renew expiring items
+      $rautorenew = $options['auto_renew'];
+      if ($rautorenew) {
+        $new_orderid = uc_subscribe_reorder_subscription($data->sid, TRUE);
+      }
+      break;
+
+    case 'expire':
+      // perform configured expiration actions
+      $u = user_load(array('uid' => $data->uid));
+      $order_id = $data->order_id;
+
+      // send expiration notice
+      $eemail = $options['expiration_email'];
+      $eemailtxt = variable_get('uc_subscribe_expiration_email_text', false);
+      if ($eemail && $eemailtxt) {
+        $repmtx = array(
+          '[name]' => $u->name,
+          '[uid]' => $u->uid,
+          '[order_id]' => $data->order_id,
+          '[product_title]' => $data->title,
+          '[time_expire]' => format_date($data->texpire, 'small')
+        );
+        $search = array_keys($repmtx);
+        $replace = array_values($repmtx);
+        $message = str_replace($search, $replace, $eemailtxt);
+        drupal_mail('uc_subscribe_expiration', $u->mail, t('Expiration notice'), $message);
+      }
+      break;
+  }
+}
+
+
+/******************************************************************************
+ * uc_subscribe core functions                                                *
+ ******************************************************************************/
+
+function uc_subscribe_register_subscription($uid, $order_product_id, $dur) {
+  // load user
+  $user = user_load(array('uid' => $uid));
+  
+  // calculate expiration time
+  if (!is_numeric($dur)) {
+    $dur = uc_subscribe_get_duration($dur);
+  }
+  if (!is_numeric($dur)) {
+    watchdog('uc_subscribe', t('uc_subscribe_register_subscription called with an invalid duration for user !user and order product id @order_product_id. Please check the attribute options for the attribute designated as contract length.', array('!user' => theme_username($user), '@order_product_id' => $order_product_id)), WATCHDOG_ERROR);
+    return FALSE;
+  }
+  
+  // determine reminder period
+  $rnum = variable_get('uc_subscribe_reminder_number', 0);
+  $runit = variable_get('uc_subscribe_reminder_unit', '');
+  $reminder_period = uc_subscribe_seconds_for_period($rnum, $runit);
+  
+  // check if subscription exists for order_product_id
+  $obj = db_fetch_object(db_query('SELECT * FROM {uc_subscriptions} WHERE order_product_id = %d', $order_product_id));
+  if ($obj) {
+    watchdog('uc_subscribe', t('uc_subscribe_register_subscription called for an order product id (@order_product_id) that already has a registered subscription (@subscription_id).', array('@order_product_id' => $order_product_id, '@subscription_id' => $obj->sid)), WATCHDOG_ERROR);
+    return FALSE;
+  }
+  
+  // create new subscription record
+  $tstart = time();
+  $texpire = $tstart + $dur;
+  $tnotify = $texpire - $reminder_period;
+  $sid = db_next_id('{uc_subscriptions}_sid');
+  db_query('INSERT INTO {uc_subscriptions} (sid, uid, order_product_id, tstart, texpire, trenew, tnotify) VALUES (%d, %d, %d, %d, %d, 0, %d)', $sid, $uid, $order_product_id, $tstart, $texpire, $tnotify);
+//    $product = db_fetch_object(db_query('SELECT * FROM {uc_order_products} WHERE order_product_id = %d', $order_product_id));
+//    $data = db_fetch_object(db_query('SELECT * FROM {uc_subscriptions} WHERE sid = %d', $sid));
+  $data = db_fetch_object(db_query('SELECT us.uid, us.sid, us.order_product_id, us.tstart, us.trenew, us.tnotify, us.texpire, us.options, uop.order_id, uop.nid, uop.title, uop.data FROM {uc_subscriptions} AS us JOIN {uc_order_products} AS uop ON (us.order_product_id = uop.order_product_id) WHERE us.sid = %d', $sid));
+  
+  // check for module hook
+  $mods = variable_get('uc_subscribe_modules', array());
+  if ($data->nid && is_array($mods[$data->nid]) && !empty($mods[$data->nid]['module']) && is_array($mods[$data->nid]['attributes'])) {
+    $mod = $mods[$data->nid]['module'];
+    // parse attributes
+    $attrs = $mods[$data->nid]['attributes'];
+    $proddata = unserialize($data->data);
+    foreach ($attrs as $key => $aid) {
+      $attr = db_result(db_query('SELECT name FROM {uc_attributes} WHERE aid = %d', $aid));
+      if (isset($proddata['attributes'][$attr])) {
+        $data->$key = $proddata['attributes'][$attr];
+      }
+    }
+    unset($data->data);
+    
+    // invoke hook
+    if (module_hook($mod, 'product_subscribe')) {
+      module_invoke($mod, 'product_subscribe', 'new', $data);
+    }
+  }
+  
+  // trigger workflow-ng event
+  if (module_exists('workflow_ng') && $data->nid) {
+    $node = node_load($data->nid);
+    workflow_ng_invoke_event('uc_subscribe_new', array('customer' => $user, 'product' => $node));
+  }
+
+  return $sid;
+}
+
+function uc_subscribe_renew_subscription($sid, $order_product_id, $dur) {
+  // calculate expiration time
+  if (!is_numeric($dur)) {
+    $dur = uc_subscribe_get_duration($dur);
+  }
+  if (!is_numeric($dur)) {
+    watchdog('uc_subscribe', t('uc_subscribe_renew_subscription called with an invalid duration for subscription @sid. Please check the attribute options for the attribute designated as contract length.', array('@sid' => $sid)), WATCHDOG_ERROR);
+    return FALSE;
+  }
+  
+  // determine reminder period
+  $rnum = variable_get('uc_subscribe_reminder_number', 0);
+  $runit = variable_get('uc_subscribe_reminder_unit', '');
+  $reminder_period = uc_subscribe_seconds_for_period($rnum, $runit);
+  
+  // check if subscription exists for order_product_id
+  $obj = db_fetch_object(db_query('SELECT * FROM {uc_subscriptions} WHERE order_product_id = %d', $order_product_id));
+  if ($obj) {
+    watchdog('uc_subscribe', t('uc_subscribe_renew_subscription called for an order product id (@order_product_id) that already has a registered subscription (@sid).', array('@order_product_id' => $order_product_id, '@sid' => $obj->sid)), WATCHDOG_ERROR);
+    return FALSE;
+  }
+  
+  // update existing subscription record
+  $subsc = db_fetch_object(db_query('SELECT * FROM {uc_subscriptions} WHERE sid = %d', $sid));
+  if ($subsc==false) {
+    watchdog('uc_subscribe', t('uc_subscribe_renew_subscription called for a subscription id (@sid) is not registered.', array('@sid' => $sid)), WATCHDOG_ERROR);
+    return FALSE;
+  }
+
+  if ($subsc->texpire > time()) {
+    $tstart = $subsc->texpire;
+  }
+  else {
+    $tstart = time();
+  }
+  $texpire = $tstart + $dur;
+  $tnotify = $texpire - $reminder_period;
+  $trenew = time();
+  
+  db_query('UPDATE {uc_subscriptions} SET order_product_id = %d, texpire = %d, tnotify = %d, trenew = %d WHERE sid = %d', $order_product_id, $texpire, $tnotify, $trenew, $sid);
+//    $product = db_fetch_object(db_query('SELECT * FROM {uc_order_products} WHERE order_product_id = %d', $order_product_id));
+//    $data = db_fetch_object(db_query('SELECT * FROM {uc_subscriptions} WHERE sid = %d', $sid));
+  $data = db_fetch_object(db_query('SELECT us.uid, us.sid, us.order_product_id, us.tstart, us.trenew, us.tnotify, us.texpire, us.options, uop.order_id, uop.nid, uop.title, uop.data FROM {uc_subscriptions} AS us JOIN {uc_order_products} AS uop ON (us.order_product_id = uop.order_product_id) WHERE us.sid = %d', $sid));
+  
+  // check for module hook
+  $mods = variable_get('uc_subscribe_modules', array());
+  if (is_array($mods[$data->nid]) && !empty($mods[$data->nid]['module']) && is_array($mods[$data->nid]['attributes'])) {
+    $mod = $mods[$data->nid]['module'];
+    // parse attributes
+    $attrs = $mods[$data->nid]['attributes'];
+    $proddata = unserialize($data->data);
+    foreach ($attrs as $key => $aid) {
+      $attr = db_result(db_query('SELECT name FROM {uc_attributes} WHERE aid = %d', $aid));
+      if (isset($proddata['attributes'][$attr])) {
+        $data->$key = $proddata['attributes'][$attr];
+      }
+    }
+    unset($data->data);
+    
+    // invoke hook
+    if (!empty($mod) && module_hook($mod, 'product_subscribe')) {
+      module_invoke($mod, 'product_subscribe', 'renew', $data);
+    }
+  }
+  
+  // trigger workflow-ng event
+  if (module_exists('workflow_ng')) {
+    $user = user_load(array('uid' => $subsc->uid));
+    $node = node_load($data->nid);
+    workflow_ng_invoke_event('uc_subscribe_new', array('customer' => $user, 'product' => $node));
+  }
+  
+  return TRUE;
+}
+
+function uc_subscribe_cancel_subscription($sid) {
+  $data = db_fetch_object(db_query('SELECT us.uid, us.sid, us.order_product_id, us.tstart, us.trenew, us.tnotify, us.texpire, us.options, uop.order_id, uop.nid, uop.title, uop.data FROM {uc_subscriptions} AS us JOIN {uc_order_products} AS uop ON (us.order_product_id = uop.order_product_id) WHERE us.sid = %d', $sid));
+  if (!$data) {
+    watchdog('uc_subscribe', t('uc_subscribe_cancel_subscription called with a subscription id (@sid) that is not registered.', array('@sid' => $sid)), WATCHDOG_ERROR);
+    return false;
+  }
+  
+  // trigger expiration hook
+  // check for module hook
+  $mods = variable_get('uc_subscribe_modules', array());
+  if (is_array($mods[$data->nid]) && !empty($mods[$data->nid]['module']) && is_array($mods[$data->nid]['attributes'])) {
+    $mod = $mods[$data->nid]['module'];
+    // parse attributes
+    $attrs = $mods[$data->nid]['attributes'];
+    $proddata = unserialize($data->data);
+    foreach ($attrs as $key => $aid) {
+      $attr = db_result(db_query('SELECT name FROM {uc_attributes} WHERE aid = %d', $aid));
+      if (isset($proddata['attributes'][$attr])) {
+        $data->$key = $proddata['attributes'][$attr];
+      }
+    }
+    unset($data->data);
+    //
+    if (!empty($mod) && module_hook($mod, 'product_subscribe')) {
+      module_invoke($mod, 'product_subscribe', 'expire', $data);
+    }
+  }
+  uc_subscribe_product_subscribe('expire', $data);
+  
+  // trigger workflow-ng event
+  if (module_exists('workflow_ng')) {
+    $user = user_load(array('uid' => $data->uid));
+    $node = node_load($data->nid);
+    workflow_ng_invoke_event('uc_subscribe_expire', array('customer' => $user, 'product' => $node));
+  }
+
+  // delete expiration schedule
+  $eremove = variable_get('uc_subscribe_expiration_remove', 0);
+  if ($eremove) {
+    $res = db_query('DELETE FROM {uc_subscriptions} WHERE sid = %d', $sid);
+  }
+  else {
+    db_query('UPDATE {uc_subscriptions} SET tnotify = 0, texpire = 0 WHERE sid = %d', $sid);
+  }
+  return true;
+}
+
+function uc_subscribe_cart_subscription($sid) {
+  $data = db_fetch_object(db_query('SELECT * FROM {uc_subscriptions} AS us JOIN {uc_order_products} AS uo ON (us.order_product_id = uo.order_product_id) WHERE sid = %d', $sid));
+  if (!$data) {
+    watchdog('uc_subscribe', t('uc_subscribe_cart_subscription called with a subscription id (@sid) that is not registered.', array('@sid' => $sid)), WATCHDOG_ERROR);
+    return false;
+  }
+  
+  $order_product_id = $data->order_product_id;
+  $order_id = $data->order_id;
+  $order = uc_order_load($order_id);
+
+  // empty the cart
+  uc_cart_empty(uc_cart_get_id());  
+  // add expiring items to new order
+  foreach ($order->products as $prod) {
+    if ($prod->order_product_id==$order_product_id) {
+      $prod = uc_subscribe_remove_activation($prod, TRUE);
+      $prod->data['subscription'] = $sid;
+      uc_cart_add_item($prod->nid, $prod->qty, $prod->data);
+    }
+  }
+  return true;
+}
+
+function uc_subscribe_reorder_subscription($sid, $process = FALSE) {
+  $data = db_fetch_object(db_query('SELECT * FROM {uc_subscriptions} AS us JOIN {uc_order_products} AS uo ON (us.order_product_id = uo.order_product_id) WHERE sid = %d', $sid));
+  if (!$data) {
+    watchdog('uc_subscribe', t('uc_subscribe_reorder_subscription called with a subscription id (@sid) that is not registered.', array('@sid' => $sid)), WATCHDOG_ERROR);
+    return false;
+  }
+  
+  $order_product_id = $data->order_product_id;
+  $order_id = $data->order_id;
+  $order = uc_order_load($order_id);
+  
+  // automatically renew expiring items
+  // create new order and duplicate delivery, billing, payment information
+  $neworder = uc_order_new($data->uid, uc_order_state_default('in_checkout'));
+  $neworder_id = $neworder->order_id;
+
+  $neworder->primary_email = $order->primary_email;
+  $neworder->delivery_first_name = $order->delivery_first_name;
+  $neworder->delivery_last_name = $order->delivery_last_name;
+  $neworder->delivery_company = $order->delivery_company;
+  $neworder->delivery_street1 = $order->delivery_street1;
+  $neworder->delivery_street2 = $order->delivery_street2;
+  $neworder->delivery_city = $order->delivery_city;
+  $neworder->delivery_zone = $order->delivery_zone;
+  $neworder->delivery_postal_code = $order->delivery_postal_code;
+  $neworder->delivery_country = $order->delivery_country;
+  $neworder->billing_first_name = $order->billing_first_name;
+  $neworder->billing_last_name = $order->billing_last_name;
+  $neworder->billing_company = $order->billing_company;
+  $neworder->billing_street1 = $order->billing_street1;
+  $neworder->billing_street2 = $order->billing_street2;
+  $neworder->billing_city = $order->billing_city;
+  $neworder->billing_zone = $order->billing_zone;
+  $neworder->billing_postal_code = $order->billing_postal_code;
+  $neworder->billing_country = $order->billing_country;
+
+  $neworder->payment_method = $order->payment_method;
+  if ($order->payment_method=='credit') {
+    $obj = db_fetch_object(db_query('SELECT * FROM {uc_payment_credit} WHERE order_id = %d', $order_id));
+    $cc_key = uc_credit_encryption_key();
+    if ($cc_key !== FALSE) {
+      $crypt = new uc_encryption_class;
+      $neworder->payment_details['cc_type'] = !empty($obj->cc_type) ? $crypt->decrypt($cc_key, $obj->cc_type) : '';
+      $neworder->payment_details['cc_owner'] = !empty($obj->cc_owner) ? $crypt->decrypt($cc_key, $obj->cc_owner) : '';
+      $neworder->payment_details['cc_number'] = !empty($obj->cc_number) ? $crypt->decrypt($cc_key, $obj->cc_number) : '';
+      $neworder->payment_details['cc_exp_month'] = !empty($obj->cc_exp_month) ? $crypt->decrypt($cc_key, $obj->cc_exp_month) : '';
+      $neworder->payment_details['cc_exp_year'] = !empty($obj->cc_exp_year) ? $crypt->decrypt($cc_key, $obj->cc_exp_year) : '';
+      $neworder->payment_details['cc_cvv'] = !empty($obj->cc_cvv) ? $crypt->decrypt($cc_key, $obj->cc_cvv) : '';
+      $neworder->payment_details['cc_bank'] = !empty($obj->cc_bank) ? $crypt->decrypt($cc_key, $obj->cc_bank) : '';
+      uc_store_encryption_errors($crypt, 'uc_subscribe');
+    }
+    else {
+      $neworder->payment_details['cc_type'] = $obj->cc_type;
+      $neworder->payment_details['cc_owner'] = $obj->cc_owner;
+      $neworder->payment_details['cc_number'] = $obj->cc_number;
+      $neworder->payment_details['cc_exp_month'] = $obj->cc_exp_month;
+      $neworder->payment_details['cc_exp_year'] = $obj->cc_exp_year;
+      $neworder->payment_details['cc_cvv'] = $obj->cc_cvv;
+      $neworder->payment_details['cc_bank'] = $obj->cc_bank;
+    }
+  }
+
+  // add expiring items to new order
+  $order_total = 0;
+  foreach ($order->products as $prod) {
+    if ($prod->order_product_id==$order_product_id) {
+      $prod = uc_subscribe_remove_activation($prod, FALSE);
+      $prod->order_product_id = 0;
+      $prod->order_id = 0;
+      $prod->data['subscription'] = $sid;
+      $neworder->products[] = $prod;
+      $order_total += $prod->price;
+    }
+  }
+  $neworder->order_total = $order_total;
+
+  // set the order modified time to prevent erasure of attributes
+  $neworder->modified = time();
+  uc_order_save($neworder);
+        
+  // complete sale of new order, moving order from in checkout to pending
+  uc_cart_complete_sale($neworder);
+
+  // process payment of new order
+  if ($process) {
+    if ($order->payment_method=='credit') {
+      $neworder = uc_order_load($neworder_id);
+      $res = uc_payment_process($neworder->payment_method, $neworder_id, uc_payment_balance($neworder), NULL, TRUE);
+    }
+  }
+
+  // add comment to order
+  uc_order_comment_save($neworder_id, 0, t('Order created as re-order.'), 'admin');
+  uc_order_comment_save($neworder_id, 0, t('This is a repeating charge.'), 'user');
+
+  return $neworder_id;
+}
+
+/* TODO obsolete
+function uc_subscribe_order_products($order) {
+  $products = array();
+  
+  $attrs = uc_subscribe_get_attributes();
+  $defattrstr = variable_get('uc_subscribe_attribute_length', '');
+  $defattrs = explode(',', $defattrstr);
+  
+  // check each product of an order
+  foreach ($order->products as $prod) {
+//TODO also/alternatively check for subscription id in data (for renewals)
+// or for the order product id in the subscriptions table (for unmarked products)
+    // check each attribute of each product for subscription length
+    foreach ($prod->data['attributes'] as $attr => $val) {
+      $aid = array_search($attr, $attrs);
+      if ($aid != FALSE && in_array($aid, $defattrs)) {
+        $products[] = $prod;
+        break;
+      }
+    }
+  }
+  
+  return $products;
+}
+*/
+
+function uc_subscribe_remove_activation($product, $forcart = FALSE) {
+//TODO this should test whether activation is relevant, as in add_to_cart
+  $attrs = uc_subscribe_get_attributes();
+  $defattrstr = variable_get('uc_subscribe_attribute_fee', '');
+  $defattrs = explode(',', $defattrstr);
+  
+  // check each attribute of each product
+  foreach ($product->data['attributes'] as $attr => $val) {
+    $aid = array_search($attr, $attrs);
+    if ($aid != false && in_array($aid, $defattrs)) {
+// TODO attributes
+      $product->data['attributes'][$attr] = t('Renewal');
+    }
+  }
+  $orig = node_load($product->nid);
+  // uc_attribute_cart_item relies on attribute array in format: aid => oid
+  $copy = drupal_clone($product);
+  $copy->cost = $orig->cost;
+  $copy->price = $orig->sell_price;
+  $copy->weight = $orig->weight;
+//TODO this does not remove the activation fee for reorders
+// but it does for carted products
+  $oldattrs = $product->data['attributes'];
+  foreach ($copy->data['attributes'] as $attr => $opt) {
+    $aid = db_result(db_query('SELECT pa.aid FROM {uc_product_attributes} AS pa JOIN {uc_attributes} AS at ON (pa.aid = at.aid) WHERE pa.nid = %d AND at.name = "%s"', $copy->nid, $attr));
+    $oid = db_result(db_query('SELECT oid FROM {uc_attribute_options} WHERE aid = %d AND name = "%s"', $aid, $opt));
+    unset($copy->data['attributes'][$attr]);
+    $copy->data['attributes'][$aid] = $oid;
+  }
+//  $copy->data['attributes'] = $oldattrs;
+  if ($forcart) {
+    uc_attribute_cart_item('load', $copy);
+    return $copy;
+  }
+  else {
+    return $product;
+  }
+}
+
+/**
+ * Called by CRON to handle expired schedules
+ */
+function uc_subscribe_cron_expire() {
+  // determine grace period
+  $elength = variable_get('uc_subscribe_expiration_number', 0);
+  $eunit = variable_get('uc_subscribe_expiration_unit', '');
+  $grace_period = uc_subscribe_seconds_for_period($elength, $eunit);
+  
+  // cancel expired subscriptions
+  $res = db_query('SELECT sid FROM {uc_subscriptions} WHERE texpire <= %d AND texpire > 0', time() - $grace_period);
+  while ($data = db_fetch_object($res)) {
+    uc_subscribe_cancel_subscription($data->sid);
+  }
+}
+
+/**
+ * Called by CRON to handle notification actions
+ */
+function uc_subscribe_cron_notify() {
+  // get reminders to trigger
+  $res = db_query('SELECT us.uid, us.sid, us.order_product_id, us.tstart, us.trenew, us.tnotify, us.texpire, us.options, uop.order_id, uop.nid, uop.title FROM {uc_subscriptions} AS us JOIN {uc_order_products} AS uop ON (us.order_product_id = uop.order_product_id) WHERE us.tnotify <= %d AND us.tnotify != 0', time());
+  while ($data = db_fetch_object($res)) {
+    // send reminder to user if schedule didn't expired already
+    if ($data->texpire > time()) {
+      // remove reminder
+      db_query('UPDATE {uc_subscriptions} SET tnotify = 0 WHERE sid = %d', $data->sid);
+
+      // trigger reminder hook
+      module_invoke_all('product_subscribe', 'notify', $data);
+
+      // trigger workflow-ng event
+      if (module_exists('workflow_ng')) {
+        $user = user_load(array('uid' => $data->uid));
+        $node = node_load($data->nid);
+        workflow_ng_invoke_event('uc_subscribe_notify', array('customer' => $user, 'product' => $node));
+      }
+    }
+  }
+}
+
+function uc_subscribe_item_activation($item) {
+  $pattrs = isset($item->data['attributes']) ? $item->data['attributes'] : array();
+  $paids = array_keys($pattrs);
+
+  $attrs = uc_subscribe_get_attributes();
+
+  $defactattrstr = variable_get('uc_subscribe_attribute_fee', '');
+  $defactattrs = explode(',', $defactattrstr);
+  
+  foreach ($defactattrs as $aid) {
+    if (in_array($aid, $paids)) {
+      $pact = $aid;
+      break;
+    }
+  }
+  
+  if ($pact) {
+//TODO improve attribute identification
+    $roid = db_result(db_query('SELECT oid FROM {uc_attribute_options} WHERE aid = %d AND name = "%s"', $pact, t('Renewal')));
+    $noid = db_result(db_query('SELECT oid FROM {uc_attribute_options} WHERE aid = %d AND name = "%s"', $pact, t('New subscription')));
+    if ($pattrs[$pact] == $noid) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+function uc_subscribe_get_options($data) {
+  if (isset($data) && isset($data->options)) {
+    $options = $data->options;
+    if (is_string($options)) {
+      $options = unserialize($options);
+    }
+  }
+  else {
+    $options = array();
+  }
+  
+  // set system defaults
+  $remail = variable_get('uc_subscribe_reminder_email', false);
+  $autorenew = variable_get('uc_subscribe_reminder_autorenew', false);
+  $eemail = variable_get('uc_subscribe_expiration_email', false);
+
+  // if custom options, override defaults
+  if (isset($options['reminder_email'])) {
+    $remail = ($options['reminder_email']=='on') ? true : false;
+  }
+
+  if (isset($options['auto_renew'])) {
+    $autorenew = ($options['auto_renew']=='on') ? true : false;
+  }
+  
+  if (isset($options['expiration_email'])) {
+    $eemail = ($options['expiration_email']=='on') ? true : false;
+  }
+
+  return array(
+    'reminder_email' => $remail,
+    'auto_renew' => $autorenew,
+    'expiration_email' => $eemail
+  );
+}
+
+
+/******************************************************************************
+ * Drupal Hooks                                                               *
+ ******************************************************************************/
+
+/**
+ * Implementation of hook_help().
+ */
+function uc_subscribe_help($section) {
+  switch ($section) {
+    // @TODO !!!
+  }
+}
+
+/**
+ * Implementation of hook_menu().
+ */
+function uc_subscribe_menu($may_cache) {
+  global $user;
+  $items = array();
+  
+  if ($may_cache) {
+    $items[] = array(
+      'path' => 'admin/store/subscriptions',
+      'title' => t('Subscriptions'),
+      'description' => t('Administer subscriptions and recurring payments.'),
+      'callback' => 'uc_subscribe_admin_manage',
+      'access' => user_access('administer store'),
+      'type' => MENU_NORMAL_ITEM,
+    );
+    $items[] = array(
+      'path' => 'admin/store/subscriptions/manage',
+      'title' => t('Manage'),
+      'description' => t('View and manage subscriptions.'),
+      'access' => user_access('administer store'),
+      'callback' => 'uc_subscribe_admin_manage',
+      'type' => MENU_NORMAL_ITEM,
+      'weight' => 0,
+    );
+    $items[] = array(
+      'path' => 'admin/store/subscriptions/settings',
+      'title' => t('Settings'),
+      'description' => t('Subscription registration and user interface options.'),
+      'access' => user_access('administer store'),
+      'callback' => 'drupal_get_form',
+      'callback arguments' => array('uc_subscribe_admin_settings'),
+      'type' => MENU_NORMAL_ITEM,
+      'weight' => 1,
+    );
+    $items[] = array(
+      'path' => 'admin/store/subscriptions/actions',
+      'title' => t('Actions'),
+      'description' => t('Actions for subscription reminder and expiration events.'),
+      'access' => user_access('administer store'),
+      'callback' => 'drupal_get_form',
+      'callback arguments' => array('uc_subscribe_admin_actions'),
+      'type' => MENU_NORMAL_ITEM,
+      'weight' => 2,
+    );
+  }
+  else {
+    if ($user->uid && variable_get('uc_subscribe_userprofile', 1)) {
+      if (arg(0)=='user') {
+        $items[] = array(
+          'path' => 'user/'. arg(1) .'/uc_subscriptions',
+          'title' => t('Product subscriptions'),
+          'description' => t('View and manage your subscriptions.'),
+          'callback' => 'uc_subscribe_user_manage',
+          'access' => user_access('administer subscriptions') || $user->uid==arg(1),
+          'type' => MENU_LOCAL_TASK,
+        );
+      }
+      if (variable_get('uc_subscribe_shortcuturl', 1)) {
+        $items[] = array(
+          'path' => 'uc_subscriptions',
+          'title' => t('My subscriptions'),
+          'description' => t('View and manage your subscriptions.'),
+          'callback' => 'drupal_goto',
+          'callback arguments' => array('user/'. $user->uid .'/uc_subscriptions'),
+          'access' => TRUE,
+          'type' => MENU_NORMAL_ITEM,
+        );
+      }
+    }
+  }
+  return $items;
+}
+
+/**
+ * Implementation of hook_cron().
+ */
+function uc_subscribe_cron() {
+  // perform expiration actions and invoke hooks
+  uc_subscribe_cron_expire();
+  
+  // perform reminder actions and invoke hooks
+  uc_subscribe_cron_notify();
+}
+
+
+/******************************************************************************
+ * Token Hooks                                                                *
+ ******************************************************************************/
+
+/**
+ * Implementation of hook_token_values().
+ */
+/*TODO enable tokens
+function uc_subscribe_token_values($type, $object = NULL) {
+}
+*/
+
+/**
+ * Implementation of hook_token_list().
+ */
+/*TODO enable tokens
+function uc_subscribe_token_list($type = 'all') {
+}
+*/
+
+/******************************************************************************
+ * Ubercart Hooks                                                             *
+ ******************************************************************************/
+
+function uc_subscribe_product_feature() {
+  $features = array();
+  //
+  $submods = module_invoke_all('subscription');
+  foreach ($submods as $sub) {
+    $features[] = array(
+      'id' => 'sub_'. $sub['module'],
+      'title' => t('Subscription: @title', array('@title' => $sub['title'])),
+      'callback' => 'uc_subscribe_feature_form',
+      'delete' => 'uc_subscribe_feature_delete',
+    );
+  }
+  return $features;
+}
+
+function uc_subscribe_feature_form($node, $feature) {
+  // identify the module
+  $subtype = arg(4);
+  if (strpos($subtype, 'sub_')===0) {
+    $mod = substr($subtype, 4);
+    if (module_hook($mod, 'subscription')) {
+      $module = $mod;
+      list($sdata) = module_invoke($mod, 'subscription');
+    }
+  }
+  if (!$module) {
+    drupal_set_message(t('Could not find subscription module for type: @type.', array('@type' => $mod)));
+  }
+  
+  // gather attributes
+  if (is_array($sdata['attributes']) && count($sdata['attributes'])) {
+    $attrs = array();
+    $res = db_query('SELECT ua.aid,ua.name FROM {uc_attributes} AS ua JOIN {uc_product_attributes} AS upa ON (ua.aid = upa.aid) WHERE upa.nid = %d', $node->nid);
+    while ($obj = db_fetch_object($res)) {
+      $attrs[$obj->aid] = $obj->name;
+    }
+  }
+  
+  // determine default values
+  $mods = variable_get('uc_subscribe_modules', array());
+  if (is_array($mods) && is_array($mods[$node->nid])) {
+    $mod = $mods[$node->nid];
+    $defattrs = $mod['attributes'];
+  }
+  
+  // get product attributes
+  $attropts = array();
+  $res = db_query('SELECT ua.* FROM {uc_attributes} ua JOIN {uc_product_attributes} upa ON (ua.aid = upa.aid) WHERE upa.nid = %d', $node->nid);
+  while ($obj = db_fetch_object($res)) {
+    if ($obj->aid && !empty($obj->name)) {
+      $attropts[$obj->aid] = $obj->name;
+    }
+  }
+  
+  // build the form
+  $form['subscription'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Configure subscription settings for @title', array('@title' => $node->title)),
+  );
+  foreach ($sdata['attributes'] as $key => $title) {
+    $form['subscription']['attr-'. $key] = array(
+      '#type' => 'select',
+      '#title' => t('Please choose the attribute that designates @type', array('@type' => $title)),
+      '#options' => $attrs,
+      '#default_value' => $defattrs[$key],
+    );
+  }
+  $form['subscription']['length'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Subscription length settings'),
+  );
+  $form['subscription']['length']['length'] = array(
+    '#type' => 'radios',
+    '#title' => t('Subscription length is defined by'),
+    '#options' => array('attribute' => t('Product attribute'), 'value' => t('Default value')),
+    '#default_value' => isset($defattrs['length']) ? $defattrs['length'] : 'value',
+  );
+  if (count($attropts)) {
+    $form['subscription']['length']['lattr'] = array(
+      '#type' => 'select',
+      '#title' => t('Product attribute for subscription length'),
+      '#options' => $attropts,
+      '#default_value' => $defattrs['lattr'],
+    );
+  }
+  else {
+    $form['subscription']['length']['lattr'] = array(
+      '#type' => 'item',
+      '#title' => t('Product attribute for subscription length'),
+      '#value' => t('No attributes defined for this product.'),
+    );
+  }
+  $form['subscription']['length']['lvalue'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Default value for subscription length'),
+    '#default_value' => $defattrs['lvalue'],
+    '#size' => 12,
+  );
+  $form['subscription']['length']['quantity'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Item quantity multiplies contract length'),
+    '#default_value' => $defattrs['quantity'],
+  );
+/* TODO add activation fee settings
+  $form['subscription']['activation'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Activation fee settings'),
+  );
+*/
+  $form['subscription']['subid'] = array(
+    '#type' => 'hidden',
+    '#value' => $module,
+  );
+  return uc_product_feature_form($form);
+}
+
+function uc_subscribe_feature_form_submit($form_id, $form_values) {
+  $nid = $form_values['nid'];
+  $mods = variable_get('uc_subscribe_modules', array());
+  $mod = $form_values['subid'];
+  if (module_hook($mod, 'subscription')) {
+    list($res) = module_invoke($mod, 'subscription');
+    if ($res && is_array($res)) {
+      $attrs = array();
+      foreach ($res['attributes'] as $key => $title) {
+        if (isset($form_values['attr-'. $key])) {
+          $attrs[$key] = $form_values['attr-'. $key];
+        }
+      }
+      $attrs['length'] = $form_values['length'];
+      $attrs['lattr'] = $form_values['lattr'];
+      $attrs['lvalue'] = $form_values['lvalue'];
+      $attrs['quantity'] = $form_values['quantity'];
+      $mods[$nid] = array('module' => $mod, 'attributes' => $attrs);
+      variable_set('uc_subscribe_modules', $mods);
+      $data = array(
+        'pfid' => $form_values['pfid'],
+        'nid' => $nid,
+        'fid' => 'sub_'. $mod,
+        'description' => t('Subscription: @title', array('@title' => $res['title'])),
+      );
+      return uc_product_feature_save($data);
+    }
+  }
+  drupal_set_message(t('An invalid subscription function was specified.'), 'error');
+  return 'node/'. $nid .'/edit/features';
+}
+
+function uc_subscribe_feature_delete($feature) {
+  $mods = variable_get('uc_subscribe_modules', array());
+  $nid = $feature['nid'];
+  if (isset($mods[$nid])) {
+    unset($mods[$nid]);
+    variable_set('uc_subscribe_modules', $mods);
+    drupal_set_message(t('Subscription disabled for this product.'));
+  }
+  else {
+    drupal_set_message(t('Subscription was already disabled.'), 'error');
+  }
+}
+
+function uc_subscribe_cart_item($op, &$item) {
+//TODO -- reconsider
+  switch ($op) {
+    case 'load':
+      if (uc_subscribe_item_activation($item)) {
+        $options = _uc_cart_product_get_options($item);
+        $actfee = 0;
+        foreach ($options as $opt) {
+          $actfee += $opt['cost'];
+        }
+        $item->price += $actfee;
+      }
+      break;
+  }
+}
+
+function uc_subscribe_add_to_cart($nid, $qty, $data) {
+  $sid = isset($data['subscription']) ? $data['subscription'] : false;
+
+  $pattrs = isset($data['attributes']) ? $data['attributes'] : array();
+  $paids = array_keys($pattrs);
+
+  $attrs = uc_subscribe_get_attributes();
+
+  $defdurattrstr = variable_get('uc_subscribe_attribute_length', '');
+  $defdurattrs = explode(',', $defdurattrstr);
+
+  $defactattrstr = variable_get('uc_subscribe_attribute_fee', '');
+  $defactattrs = explode(',', $defactattrstr);
+  
+  $pdur = false;
+  foreach ($defdurattrs as $aid) {
+    if (in_array($aid, $paids)) {
+      $pdur = $aid;
+      break;
+    }
+  }
+
+  if ($pdur) {
+    foreach ($defactattrs as $aid) {
+      if (in_array($aid, $paids)) {
+        $pact = $aid;
+        break;
+      }
+    }
+    
+    if ($pact) {
+      $texpire = db_result(db_query('SELECT texpire FROM {uc_subscriptions} WHERE sid = %d', $sid));
+      if ($texpire && $texpire > time()) {
+//TODO attribute detection
+        $oid = db_result(db_query('SELECT oid FROM {uc_attribute_options} WHERE aid = %d AND name = "%s"', $pact, t('Renewal')));
+        if ($oid != $pattrs[$pact]) {
+          $result[] = array(
+            'success' => false,
+            'message' => 'You already have a subscription to this product. You should select "Renewal" under "Activation fee".'
+          );
+          return $result;
+        }
+      }
+      else {
+//TODO attribute identification
+        $oid = db_result(db_query('SELECT oid FROM {uc_attribute_options} WHERE aid = %d AND name = "%s"', $pact, t('New subscription')));
+        if ($oid != $pattrs[$pact]) {
+          $result[] = array(
+            'success' => false,
+            'message' => 'This is your first subscription to this product. Please choose "New subscription" under "Activation fee".'
+          );
+          return $result;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implementation of hook_order().
+ */
+function uc_subscribe_order($op, &$arg1, $arg2) {
+  switch ($op) {
+    case 'update':
+      $order = $arg1;
+      $order_id = $arg1->order_id;
+      $newstatus = $arg2;
+      
+      $onstatus = variable_get('uc_subscribe_onstatus', false);
+      $poststatus = variable_get('uc_subscribe_poststatus', false);
+      $cancelstatus = variable_get('uc_subscribe_cancelstatus', false);
+      
+      // check whether order status matches specified status for processing
+      if ($onstatus && uc_order_status_data($newstatus, 'state')==uc_order_status_data($onstatus, 'state')) {
+//TODO obsolete
+//        $products = uc_subscribe_order_products($order);
+        foreach ($order->products as $prod) {
+/*TODO obsolete
+          // get value of length attribute
+          $attrs = uc_subscribe_get_attributes();
+          $defattrstr = variable_get('uc_subscribe_attribute_length', '');
+          $defattrs = explode(',', $defattrstr);
+          foreach ($prod->data['attributes'] as $attr => $val) {
+            $aid = array_search($attr, $attrs);
+            if ($aid != false && in_array($aid, $defattrs)) {
+              break;
+            }
+          }
+*/
+          // get product options
+          $mods = variable_get('uc_subscribe_modules', array());
+          if (is_array($mods) && is_array($mods[$prod->nid])) {
+            $mod = $mods[$prod->nid];
+            $prodopts = $mod['attributes'];
+          }
+          else {
+            continue;
+          }
+          // do not process 'locked' products
+          if ($prodopts['locked']) {
+            continue;
+          }
+          // determine contract length
+          $length = FALSE;
+          if ($prodopts['length'] == 'attribute') {
+            $aid = $prodopts['lattr'];
+            $aname = db_result(db_query('SELECT name FROM {uc_attributes} WHERE aid = %d', $aid));
+            if (isset($prod->data['attributes'][$aname])) {
+              $length = uc_subscribe_get_duration($prod->data['attributes'][$aname]);
+            }
+          }
+          if (!is_numeric($length)) {
+            $length = uc_subscribe_get_duration($prodopts['lvalue']);
+          }
+          // if set, multiply contract length by quantity
+          if ($prodopts['quantity']) {
+            $length = $prod->qty * $length;
+          }
+          // renew or register subscription
+          if ($resid = $prod->data['subscription']) {
+            $rv = uc_subscribe_renew_subscription($resid, $prod->order_product_id, $length);
+            if ($rv) {
+              uc_order_comment_save($order_id, 0, t('Subscription renewed'), 'admin');
+              if ($poststatus) {
+                uc_order_update_status($order_id, $poststatus);
+              }
+            }
+            else {
+              uc_order_comment_save($order_id, 0, t('Subscription renewal failed'), 'admin');
+            }
+          }
+          else {
+            $rv = uc_subscribe_register_subscription($order->uid, $prod->order_product_id, $length);
+            if ($rv) {
+              uc_order_comment_save($order_id, 0, t('Subscription registered'), 'admin');
+              if ($poststatus) {
+                uc_order_update_status($order_id, $poststatus);
+              }
+            }
+            else {
+              uc_order_comment_save($order_id, 0, t('Subscription registration failed'), 'admin');
+            }
+          }
+        }
+      }
+      else if ($cancelstatus && uc_order_status_data($newstatus, 'state')==uc_order_status_data($cancelstatus, 'state')) {
+//TODO obsolete
+//        $products = uc_subscribe_order_products($order);
+        foreach ($order->products as $prod) {
+          if ($prod->data['subscription']) {
+            $sid = $prod->data['subscription'];
+          }
+          else {
+            // get product options
+            $mods = variable_get('uc_subscribe_modules', array());
+            if (is_array($mods) && is_array($mods[$prod->nid])) {
+              $sid = db_result(db_query('SELECT sid FROM {uc_subscriptions} WHERE order_product_id = %d', $prod->order_product_id));
+            }
+          }
+          if ($sid) {
+            $rv = uc_subscribe_cancel_subscription($sid);
+          }
+          if ($rv) {
+            uc_order_comment_save($order_id, 0, t('Subscription cancelled by order cancellation'), 'admin');
+          }
+          else {
+            uc_order_comment_save($order_id, 0, t('Subscription cancellation failed'), 'admin');
+          }
+        }
+      }
+      break;
+  }
+}
+
+
+/******************************************************************************
+ * Workflow-ng Hooks                                                          *
+ ******************************************************************************/
+
+/**
+ * Implementation of hook_event_info()
+ */
+function uc_subscribe_event_info() {
+  return array(
+    'uc_subscribe_new' => array(
+      '#label' => t('New subscription has been registered'),
+      '#module' => t('Ubercart Subscriptions'),
+      '#arguments' => array(
+        'customer' => array('#entity' => 'user', '#label' => t('Customer')),
+        'product' => array('#entity' => 'node', '#label' => t('Product')),
+      ),
+    ),
+    'uc_subscribe_renew' => array(
+      '#label' => t('Subscription has been renewed'),
+      '#module' => t('Ubercart Subscriptions'),
+      '#arguments' => array(
+        'customer' => array('#entity' => 'user', '#label' => t('Customer')),
+        'product' => array('#entity' => 'node', '#label' => t('Product')),
+      ),
+    ),
+    'uc_subscribe_notify' => array(
+      '#label' => t('Subscription has reached reminder threshold'),
+      '#module' => t('Ubercart Subscriptions'),
+      '#arguments' => array(
+        'customer' => array('#entity' => 'user', '#label' => t('Customer')),
+        'product' => array('#entity' => 'node', '#label' => t('Product')),
+      ),
+    ),
+    'uc_subscribe_expire' => array(
+      '#label' => t('Subscription has expired'),
+      '#module' => t('Ubercart Subscriptions'),
+      '#arguments' => array(
+        'customer' => array('#entity' => 'user', '#label' => t('Customer')),
+        'product' => array('#entity' => 'node', '#label' => t('Product')),
+      ),
+    ),
+  );
+}
+
+
+/******************************************************************************
+ * Menu Callbacks                                                             *
+ ******************************************************************************/
+
+function uc_subscribe_admin_manage() {
+  if (is_numeric(arg(3))) {
+    $asid = arg(3);
+    $aop = arg(4);
+    $acon = arg(5);
+  }
+  
+  if ($asid && $aop && is_numeric($asid)) {
+    switch ($aop) {
+      case 'edit':
+        $output .= drupal_get_form('uc_subscribe_subscriptions_edit', $asid);
+        break;
+      case 'reorder':
+        if ($acon=='confirm') {
+          $order_id = uc_subscribe_reorder_subscription($asid);
+          if ($order_id) {
+            drupal_goto('admin/store/orders/'. $order_id);
+          }
+          else {
+            drupal_set_message(t('Could not re-order this subscription.'), 'error');
+          }
+        }
+        else {
+          drupal_set_message(t('Are you sure you want to reorder this subscription? Click !here to confirm.', array('!here' => l(t('here'), 'admin/store/subscriptions/'. $asid .'/reorder/confirm'))));
+        }
+        break;
+      case 'cancel':
+        if ($acon=='confirm') {
+          uc_subscribe_cancel_subscription($asid);
+          drupal_set_message(t('Subscription cancelled.'));
+          drupal_goto('admin/store/subscriptions/manage');
+        }
+        else {
+          drupal_set_message(t('Are you sure you want to cancel this subscription? Click !here to confirm.', array('!here' => l(t('here'), 'admin/store/subscriptions/'. $asid .'/cancel/confirm'))));
+        }
+        break;
+    }
+  }
+
+  $header = array(
+    array('data' => t('User'), 'field' => 'uid'),
+    array('data' => t('Product'), 'field' => 'title'),
+    array('data' => t('Order #'), 'field' => 'order_id'),
+    array('data' => t('First subscription'), 'field' => 'tstart'),
+    array('data' => t('Current'), 'field' => 'trenew'),
+    array('data' => t('Expiration'), 'field' => 'texpire', 'sort' => 'desc'),
+    array('data' => t('Status'), 'field' => 'status')
+  );
+  
+  if ($asid && is_numeric($asid)) {
+    $res = db_query('SELECT * FROM {uc_subscriptions} AS us JOIN {uc_order_products} AS uo ON (us.order_product_id = uo.order_product_id) WHERE sid = %d'. tablesort_sql($header), $asid);
+  }
+  else {
+    $res = db_query('SELECT * FROM {uc_subscriptions} AS us JOIN {uc_order_products} AS uo ON (us.order_product_id = uo.order_product_id) '. tablesort_sql($header));
+  }
+  
+  $mods = variable_get('uc_subscribe_modules', array());
+  
+  while ($data = db_fetch_object($res)) {
+    if ($mods[$data->nid]['attributes']['locked']) {
+      $op = t('Locked');
+    }
+    else {
+      $op = l(t('Edit'), 'admin/store/subscriptions/'. $data->sid .'/edit');
+      $op .= ' | '. l(t('Reorder'), 'admin/store/subscriptions/'. $data->sid .'/reorder');
+      $op .= ' | '. l(t('Cancel'), 'admin/store/subscriptions/'. $data->sid .'/cancel');
+    }
+    if ($data->texpire <= time()) {
+      $status = '<font color="#aa0000">'. t('Expired') .'</font>';
+    }
+    else if ($data->tnotify == 0) {
+      $status = '<font color="#aaaa00">'. t('Reminder') .'</font> | '. $op;
+    }
+    else {
+      $status = '<font color="#00aa00">'. t('Ok') .'</font> | '. $op;
+    }
+    
+    $rows[] = array(
+      array('data' => theme_username(user_load(array('uid' => $data->uid)))),
+      array('data' => l($data->title, 'node/'. $data->nid)),
+      array('data' => l(t('Order @order_id', array('@order_id' => $data->order_id)), 'admin/store/orders/'. $data->order_id)),
+      array('data' => format_date($data->tstart, 'small')),
+      array('data' => $data->trenew ? format_date($data->trenew, 'small') : format_date($data->tstart, 'small')),
+      array('data' => $data->texpire ? format_date($data->texpire, 'small') : ''),
+      array('data' => $status),
+    );
+  }
+  
+  $output .= theme('table', $header, $rows);
+  return $output;
+}
+
+function uc_subscribe_subscriptions_edit($sid) {
+  $res = db_query('SELECT * FROM {uc_subscriptions} AS us JOIN {uc_order_products} AS uo ON (us.order_product_id = uo.order_product_id) WHERE sid = %d', $sid);
+  $data = db_fetch_object($res);
+
+  $res = db_query('SELECT uid, name FROM {users}');
+  $useropts = array();
+  while ($obj = db_fetch_object($res)) {
+    if ($obj->uid) {
+      $useropts[$obj->uid] = $obj->name .' ('. $obj->uid .')';
+    }
+  }
+  
+  $form['edit'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Edit subscription @sid', array('@sid' => $sid)),
+//    '#tree' => TRUE,
+  );
+  $form['edit']['sid'] = array(
+    '#type' => 'hidden',
+    '#value' => $sid,
+  );
+  $form['edit']['uid'] = array(
+    '#type' => 'select',
+    '#title' => t('Drupal user (uid)'),
+    '#options' => $useropts,
+    '#default_value' => $data->uid,
+  );
+  $form['edit']['product'] = array(
+    '#type' => 'item',
+    '#title' => t('Product'),
+    '#value' => $data->title,
+  );
+  $form['edit']['order'] = array(
+    '#type' => 'item',
+    '#title' => t('Order'),
+    '#value' => l(t('Order @order_id', array('@order_id' => $data->order_id)), 'admin/store/orders/'. $data->order_id),
+  );
+//TODO - need unix time stamp field, this doesn't include time
+  $form['edit']['tstart'] = array(
+    '#type' => 'date',
+    '#title' => t('Subscription start'),
+    '#default_value' => uc_subscribe_time2date($data->tstart),
+  );
+/*TODO date api has problems
+  include_once(drupal_get_path('module', 'date_api') .'/date.inc');
+  $adjtime = $data->tstart + intval(variable_get('date_default_timezone', '0'));
+  $params = array(
+    'label' => t('Subscription start'),
+    'value' => $adjtime,
+    'format' => DATE_UNIX,
+    'weight' => 1,
+    'granularity' => array('Y', 'M', 'D', 'H', 'N'),
+    'timezone_in' => 'GMT',
+    'timezone_out' => 'none',
+    'year_range' => '0:+5',
+  );
+  $form['edit']['tstart'] = date_select_input($params);
+*/
+//TODO - need unix time stamp field, this doesn't include time
+  $form['edit']['trenew'] = array(
+    '#type' => 'date',
+    '#title' => t('Current subscription'),
+    '#default_value' => ($data->trenew) ? uc_subscribe_time2date($data->trenew) : uc_subscribe_time2date($data->tstart),
+  );
+/*TODO
+  if (!$data->trenew) {
+    $data->trenew = $data->tstart;
+  }
+  $adjtime = $data->trenew + intval(variable_get('date_default_timezone', '0'));
+  $params = array(
+    'label' => t('Current subscription'),
+    'value' => $adjtime,
+    'format' => DATE_UNIX,
+    'weight' => 2,
+    'granularity' => array('Y', 'M', 'D', 'H', 'N'),
+    'timezone_in' => 'GMT',
+    'timezone_out' => 'none',
+    'year_range' => '0:+5',
+  );
+  $form['edit']['trenew'] = date_select_input($params);
+*/
+  $form['edit']['tnotify'] = array(
+    '#type' => 'item',
+    '#title' => t('Notification'),
+    '#value' => ($data->tnotify>0) ? format_date($data->tnotify, 'small') : t('Notification sent'),
+//    '#weight' => 3,
+  );
+//TODO - need unix time stamp field, this doesn't include time
+  $form['edit']['texpire'] = array(
+    '#type' => 'date',
+    '#title' => t('Expiration'),
+    '#default_value' => uc_subscribe_time2date($data->texpire),
+  );
+/*TODO
+  $adjtime = $data->texpire + intval(variable_get('date_default_timezone', '0'));
+  $params = array(
+    'label' => t('Expiration'),
+    'value' => $adjtime,
+    'format' => DATE_UNIX,
+    'weight' => 4,
+    'granularity' => array('Y', 'M', 'D', 'H', 'N'),
+    'timezone_in' => 'GMT',
+    'timezone_out' => 'none',
+    'year_range' => '0:+5',
+  );
+  $form['edit']['texpire'] = date_select_input($params);
+*/
+  $form['edit']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit'),
+//    '#weight' => 5,
+  );
+  return $form;
+}
+
+function uc_subscribe_subscriptions_edit_validate($form_id, $form_values) {
+}
+
+function uc_subscribe_subscriptions_edit_submit($form_id, $form_values) {
+  // subscription and user IDs
+  $sid = $form_values['sid'];
+  $uid = $form_values['uid'];
+  
+  // subscription dates
+  $tstart = uc_subscribe_date2time($form_values['tstart']);
+  $trenew = uc_subscribe_date2time($form_values['trenew']);
+  $texpire = uc_subscribe_date2time($form_values['texpire']);
+  
+  // determine reminder period
+  $rnum = variable_get('uc_subscribe_reminder_number', 0);
+  $runit = variable_get('uc_subscribe_reminder_unit', '');
+  $reminder_period = uc_subscribe_seconds_for_period($rnum, $runit);
+  $tnotify = $texpire - $reminder_period;
+  
+  // update subscription record
+  $rv = db_query('UPDATE {uc_subscriptions} SET uid = %d, tstart = %d, trenew = %d, tnotify = %d, texpire = %d WHERE sid = %d', $uid, $tstart, $trenew, $tnotify, $texpire, $sid);
+  if ($rv) {
+    drupal_set_message(t('Subscription sucessfully modified.'));
+    drupal_goto('admin/store/subscriptions/'. $sid);
+  }
+  else {
+    drupal_set_message(t('Error trying to modify subscription.'), 'error');
+  }
+}
+
+function uc_subscribe_admin_actions() {
+  // numbers for reminder period
+  $numbers = drupal_map_assoc(range(0, 60));
+  $numbers[0] = '--';
+
+  $form = array();
+  $form['reminder'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Reminder settings')
+  );
+  $form['reminder']['period'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Reminder period'),
+    '#description' => t('Specify the amount of time before a product expires when the following reminder/renewal events should take place.')
+  );
+  $form['reminder']['period']['reminder_number'] = array(
+    '#type' => 'select',
+    '#default_value' => variable_get('uc_subscribe_reminder_number', 0),
+    '#options' => $numbers
+  );
+  $form['reminder']['period']['reminder_unit'] = array(
+    '#type' => 'select',
+    '#default_value' => variable_get('uc_subscribe_reminder_unit', 0),
+    '#options' => uc_subscribe_period_units_options()
+  );
+  $form['reminder']['remail'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Send e-mail notification at reminder time'),
+    '#description' => t("Check this to send a reminder e-mail to the customer at the time specified in the product expiration settings."),
+    '#default_value' => variable_get('uc_subscribe_reminder_email', 0),
+  );
+  $form['reminder']['remailtxt'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Reminder e-mail template'),
+    '#description' => t("Template for the e-mail sent to remind users of upcoming expirations. You may use the following tokens: [name] for user's name, [uid] for user's id, [order_id] for the id of the order containing the product that will expire, [product_title] for the title of the product, [time_expire] for the expiration date."),
+    '#default_value' => variable_get('uc_subscribe_reminder_email_text', ''),
+    '#cols' => 60,
+    '#rows' => 6,
+  );
+  $form['reminder']['autorenew'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Automatically renew expiring products'),
+    '#description' => t('Check this to automatically create and process a new order with the expiring items. The new order will use the same payment method as the original order. If the customer paid with a credit card, she will be charged when the renewal order is processed.'),
+    '#default_value' => variable_get('uc_subscribe_reminder_autorenew', 0),
+  );
+  $form['expiration'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Expiration settings')
+  );
+  $form['expiration']['period'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Expiration grace period'),
+    '#description' => t("Specify the amount of time after a product's expiration time when expiration events should take place."),
+  );
+  $form['expiration']['period']['expiration_number'] = array(
+    '#type' => 'select',
+    '#default_value' => variable_get('uc_subscribe_expiration_number', 0),
+    '#options' => $numbers
+  );
+  $form['expiration']['period']['expiration_unit'] = array(
+    '#type' => 'select',
+    '#default_value' => variable_get('uc_subscribe_expiration_unit', 0),
+    '#options' => uc_subscribe_period_units_options()
+  );
+  $form['expiration']['eremove'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Remove subscription record at expiration'),
+    '#description' => t('Uncheck this box to save expired subscription records. It is recommended to allow these records to be removed.'),
+    '#default_value' => variable_get('uc_subscribe_expiration_remove', 0),
+  );
+  $form['expiration']['eemail'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Send e-mail notification at expiration'),
+    '#description' => t('Check this to send an e-mail to the customer when the product expires.'),
+    '#default_value' => variable_get('uc_subscribe_expiration_email', 0),
+  );
+  $form['expiration']['eemailtxt'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Expiration e-mail template'),
+    '#description' => t("Template for the e-mail sent to notify users of a product expiration. You may use the following tokens: [name] for user's name, [uid] for user's id, [order_id] for the id of the order containing the product that will expire, [product_title] for the title of the product, [time_expire] for the expiration date."),
+    '#default_value' => variable_get('uc_subscribe_expiration_email_text', ''),
+    '#cols' => 60,
+    '#rows' => 6,
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save configuration'),
+  );
+  return $form;
+}
+
+function uc_subscribe_admin_actions_validate($form_id, $form_values) {
+  if ($form_values['reminder_number'] == 0) {
+    drupal_set_message(t('Warning: No reminder period has been set. This is equivalent to disabling all of the reminder actions.'));
+  }
+  else if (!in_array($form_values['reminder_unit'], uc_subscribe_period_units())) {
+    form_set_error('reminder_unit', t('Please select a valid unit for the reminder period.'));
+  }
+}
+
+function uc_subscribe_admin_actions_submit($form_id, $form_values) {
+  variable_set('uc_subscribe_reminder_number', $form_values['reminder_number']);
+  variable_set('uc_subscribe_reminder_unit', $form_values['reminder_unit']);
+
+  if ($form_values['remail']==1) {
+    variable_set('uc_subscribe_reminder_email', 1);
+    variable_set('uc_subscribe_reminder_email_text', $form_values['remailtxt']);
+  }
+  else {
+    variable_set('uc_subscribe_reminder_email', 0);
+  }
+
+  if ($form_values['autorenew']==1) {
+    variable_set('uc_subscribe_reminder_autorenew', 1);
+  }
+  else {
+    variable_set('uc_subscribe_reminder_autorenew', 0);
+  }
+
+  variable_set('uc_subscribe_expiration_number', $form_values['expiration_number']);
+  variable_set('uc_subscribe_expiration_unit', $form_values['expiration_unit']);
+  
+  if ($form_values['eremove']==1) {
+    variable_set('uc_subscribe_expiration_remove', 1);
+  }
+  else {
+    variable_set('uc_subscribe_expiration_remove', 0);
+  }
+
+  if ($form_values['eemail']==1) {
+    variable_set('uc_subscribe_expiration_email', 1);
+    variable_set('uc_subscribe_expiration_email_text', $form_values['eemailtxt']);
+  }
+  else {
+    variable_set('uc_subscribe_expiration_email', 0);
+  }
+
+  drupal_set_message(t('Subscription actions have been saved successfully.'));
+}
+
+function uc_subscribe_admin_settings() {
+  // product attributes
+  $attrs = uc_subscribe_get_attributes();
+  $defdurattrstr = variable_get('uc_subscribe_attribute_length', '');
+  $defdurattrs = explode(',', $defdurattrstr);
+  $defactattrstr = variable_get('uc_subscribe_attribute_fee', '');
+  $defactattrs = explode(',', $defactattrstr);
+
+  // order statuses
+  $slist = uc_order_status_list();
+  $orderopts = array();
+  $postopts = array();
+  $cancelopts = array();
+  $orderopts[0] = t('Disable subscription registration');
+  $postopts[0] = t('No change to order status');
+  $cancelopts[0] = t('Disable subscription cancellation from order status');
+  foreach ($slist as $status) {
+    $orderopts[$status['id']] = $status['title'];
+    $postopts[$status['id']] = $status['title'];
+    $cancelopts[$status['id']] = $status['title'];
+  }
+  
+  $form = array();
+//TODO this section is becoming obsolete
+  $form['attr'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Subscription attribute options'),
+    '#description' => t("The purchase of a product will register a subscription if the product includes an attribute designated here as being the subscription period. The attribute's options must be formatted as periods of time, such as '30 days', '3 months', or '1 year'.")
+  );
+  $form['attr']['durattrs'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Attributes to use as subscription period'),
+    '#options' => $attrs,
+    '#default_value' => $defdurattrs
+  );
+  $form['attr']['actattrs'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Attributes to use as activation fee'),
+    '#description' => t('Select the product attributes that you would like to use as an activation fee. These attributes will be removed from products on orders that are renewals.'),
+    '#options' => $attrs,
+    '#default_value' => $defactattrs
+  );
+  $form['attr']['newattr'] = array(
+    '#type' => 'item',
+    '#value' => l(t('Add new attribute'), 'admin/store/products/attributes')
+  );
+  $form['integrate'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Subscription registration options'),
+    '#description' => t('Subscriptions are registered when the order with products (using subscription attributes) reaches the order status specified below. Optionally, when the subscriptions are registered, the order status can be automatically changed to another status specified below.')
+  );
+  $form['integrate']['onstatus'] = array(
+    '#type' => 'radios',
+    '#title' => t('Order status required for subscription registration'),
+    '#options' => $orderopts,
+    '#default_value' => variable_get('uc_subscribe_onstatus', 0)
+  );
+  $form['integrate']['poststatus'] = array(
+    '#type' => 'radios',
+    '#title' => t('Order status set after subscription registration'),
+    '#options' => $postopts,
+    '#default_value' => variable_get('uc_subscribe_poststatus', 0)
+  );
+  $form['integrate']['cancelstatus'] = array(
+    '#type' => 'radios',
+    '#title' => t('Order status for subscription cancellation'),
+    '#options' => $cancelopts,
+    '#default_value' => variable_get('uc_subscribe_cancelstatus', 0)
+  );
+  $form['settings'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Subscription user interface options'),
+  );
+  $form['settings']['userprofile'] = array(
+    '#type' => 'checkbox',
+    '#title' => t("Enable 'Product Subscriptions' section in user account for managing subscriptions."),
+    '#default_value' => variable_get('uc_subscribe_userprofile', 1),
+  );
+  $form['settings']['shortcuturl'] = array(
+    '#type' => 'checkbox',
+    '#title' => t("Enable /uc_subscriptions shortcut URL to user's subscriptions management page."),
+    '#default_value' => variable_get('uc_subscribe_shortcuturl', 1),
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save configuration'),
+  );
+  return $form;
+}
+
+function uc_subscribe_admin_settings_validate($form_id, $form_values) {
+// TODO check attribute options for understandable format
+}
+
+function uc_subscribe_admin_settings_submit($form_id, $form_values) {
+  $durattrs = array();
+  foreach ($form_values['durattrs'] as $aid => $val) {
+    if ($val==$aid) {
+      $durattrs[] = $aid;
+    }
+  }
+  $durattrstr = join(',', $durattrs);
+  variable_set('uc_subscribe_attribute_length', $durattrstr);
+
+  $actattrs = array();
+  foreach ($form_values['actattrs'] as $aid => $val) {
+    if ($val==$aid) {
+      $actattrs[] = $aid;
+    }
+  }
+  $actattrstr = join(',', $actattrs);
+  variable_set('uc_subscribe_attribute_fee', $actattrstr);
+  
+  variable_set('uc_subscribe_onstatus', $form_values['onstatus']);
+  variable_set('uc_subscribe_poststatus', $form_values['poststatus']);
+  variable_set('uc_subscribe_cancelstatus', $form_values['cancelstatus']);
+  
+  variable_set('uc_subscribe_userprofile', $form_values['userprofile']);
+  variable_set('uc_subscribe_shortcuturl', $form_values['shortcuturl']);
+  
+  drupal_set_message(t('Subscription settings have been saved successfully.'));
+}
+
+function uc_subscribe_user_manage() {
+  $uid = arg(1);
+  $asid = arg(3);
+  $aop = arg(4);
+  $acon = arg(5);
+  drupal_set_title(t('Subscriptions'));
+  
+  $breadcrumb = drupal_get_breadcrumb();
+  $breadcrumb[] = l(t('My account'), 'user/'. $uid);
+  drupal_set_breadcrumb($breadcrumb);
+  
+  if ($asid && $aop && is_numeric($asid)) {
+    switch ($aop) {
+      case 'options':
+        $output .= drupal_get_form('uc_subscribe_user_options', $asid);
+        break;
+      case 'renew':
+        if ($acon=='confirm') {
+          $rv = uc_subscribe_cart_subscription($asid);
+          if ($rv) {
+            drupal_goto('cart/checkout');
+          }
+          else {
+            drupal_set_message(t('Could not re-order this subscription.'), 'error');
+          }
+        }
+        else {
+          drupal_set_message(t('Are you sure you want to renew this subscription? Click !here to confirm.', array('!here' => l(t('here'), 'user/'. $uid .'/uc_subscriptions/'. $asid .'/renew/confirm'))));
+        }
+        break;
+    }
+  }
+
+  $header = array(
+    array('data' => t('Product'), 'field' => 'title', 'sort' => 'asc'),
+    array('data' => t('Order #'), 'field' => 'order_id'),
+    array('data' => t('First subscription'), 'field' => 'tstart'),
+    array('data' => t('Current'), 'field' => 'trenew'),
+    array('data' => t('Expiration'), 'field' => 'texpire'),
+    array('data' => t('Status'))
+  );
+  
+  $mods = variable_get('uc_subscribe_modules', array());
+  
+  if ($asid && is_numeric($asid)) {
+    $res = db_query('SELECT us.sid, us.tstart, us.trenew, us.tnotify, us.texpire, us.options, uop.order_id, uop.nid, uop.title FROM {uc_subscriptions} AS us JOIN {uc_order_products} AS uop ON (us.order_product_id = uop.order_product_id) WHERE us.uid = %d AND us.sid = %d'. tablesort_sql($header), $uid, $asid);
+  }
+  else {
+    $res = db_query('SELECT us.sid, us.tstart, us.trenew, us.tnotify, us.texpire, us.options, uop.order_id, uop.nid, uop.title FROM {uc_subscriptions} AS us JOIN {uc_order_products} AS uop ON (us.order_product_id = uop.order_product_id) WHERE us.uid = %d'. tablesort_sql($header), $uid);
+  }
+  
+  while ($data = db_fetch_object($res)) {
+    if ($mods[$data->nid]['attributes']['locked']) {
+      $op = t('Locked');
+    }
+    else {
+      $op = l(t('Options'), 'user/'. $uid .'/uc_subscriptions/'. $data->sid .'/options');
+      $op .= ' | '. l(t('Renew'), 'user/'. $uid .'/uc_subscriptions/'. $data->sid .'/renew');
+    }
+    $options = uc_subscribe_get_options($data);
+    if ($options['auto_renew']) {
+      $op = '('. t('Auto-Renew') .') '. $op;
+    }
+    if ($data->texpire <= time()) {
+      $s = '<font color="#aa0000">'. t('Expired') .'</font>';
+    }
+    else if ($data->tnotify == 0) {
+      $s = '<font color="#aaaa00">'. t('Reminder') .'</font> | '. $op;
+    }
+    else {
+      $s = '<font color="#00aa00">'. t('Ok') .'</font> | '. $op;
+    }
+    $rows[] = array(
+      array('data' => l($data->title, 'node/'. $data->nid)),
+      array('data' => l(t('Order @order_id', array('@order_id' => $data->order_id)), 'user/'. $uid .'/order/'. $data->order_id)),
+      array('data' => format_date($data->tstart, 'small')),
+      array('data' => ($data->trenew) ? format_date($data->trenew, 'small') : format_date($data->tstart, 'small')),
+      array('data' => ($data->texpire) ? format_date($data->texpire, 'small') : ''),
+      array('data' => $s)
+    );
+  }
+  
+  $output .= theme('table', $header, $rows);
+  return $output;
+}
+
+function uc_subscribe_user_options($sid) {
+  $res = db_query('SELECT * FROM {uc_subscriptions} WHERE sid = %d', $sid);
+  $data = db_fetch_object($res);
+  if (!$data) {
+    drupal_set_message(t('Could not retrieve subscription data.'), 'error');
+    return;
+  }
+  
+  $res = db_query('SELECT * FROM {uc_order_products} WHERE order_product_id = %d', $data->order_product_id);
+  $oprod = db_fetch_object($res);
+
+  $tremain = $data->texpire - time();
+  $tpurchase = ($data->trenew) ? $data->trenew : $data->tstart;
+  if ($tremain <= 0) {
+    $status = t('Your subscription to @ptitle is about to expire. You last purchased a subscription on @tpurchase.',
+      array('@ptitle' => $oprod->title, '@tpurchase' => format_date($tpurchase, 'small')));
+  }
+  else {
+    $status = t('Your subscription to @ptitle expires in @tremain. You last purchased a subscription on @tpurchase.',
+      array('@ptitle' => $oprod->title, '@tpurchase' => format_date($tpurchase, 'small'), '@tremain' => format_interval($tremain)));
+  }
+
+  $options = uc_subscribe_get_options($data);
+
+  $form['options'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Options for subscription @sid', array('@sid' => $sid)),
+  );
+  $form['options']['status'] = array(
+    '#type' => 'item',
+    '#title' => t('Subscription status'),
+    '#value' => $status
+  );
+  $form['options']['sid'] = array(
+    '#type' => 'hidden',
+    '#value' => $sid,
+  );
+  $form['options']['remail'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Send reminder e-mail before expiration'),
+    '#default_value' => $options['reminder_email'],
+  );
+  $form['options']['autorenew'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Automatically renew subscription before expiration'),
+    '#default_value' => $options['auto_renew'],
+  );
+  $form['options']['eemail'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Send expiration notice e-mail'),
+    '#default_value' => $options['expiration_email'],
+  );
+  $form['options']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save options'),
+  );
+  $form['options']['close'] = array(
+    '#type' => 'submit',
+    '#value' => t('Close'),
+  );
+  return $form;
+}
+
+function uc_subscribe_user_options_submit($form_id, $form_values) {
+  if ($form_values['op']==$form_values['close']) {
+    drupal_goto('user/'. arg(1) .'/uc_subscriptions');
+  }
+  
+  // check sid and retreive subscription data
+  if (isset($form_values['sid']) && is_numeric($form_values['sid'])) {
+    $sid = $form_values['sid'];
+    $res = db_query('SELECT * FROM {uc_subscriptions} WHERE sid = %d', $sid);
+    $data = db_fetch_object($res);
+  }
+  if (!$sid || !$data || $data->sid!=$sid) {
+    drupal_set_message(t('The subscription information could not be retreived. Please try again.'), 'error');
+    return;
+  }
+  
+  $options = false;
+  if ($form_values['op']==$form_values['submit']) {
+    $remail = $form_values['remail'] ? 'on' : 'off';
+    $autorenew = $form_values['autorenew'] ? 'on' : 'off';
+    $eemail = $form_values['eemail'] ? 'on' : 'off';
+    $options = array(
+      'reminder_email' => $remail,
+      'auto_renew' => $autorenew,
+      'expiration_email' => $eemail
+    );
+    $options = serialize($options);
+  }
+  else if ($form_values['op']==$form_values['reset']) {
+    $options = array();
+    $options = serialize($options);
+  }
+  
+  if (is_string($options)) {
+    $res = db_query("UPDATE {uc_subscriptions} SET options = '%s' WHERE sid = %d", $options, $sid);
+    if ($res && db_affected_rows($res)) {
+      drupal_set_message(t('Subscription options have been successfully updated.'));
+    }
+    else {
+      drupal_set_message(t('Could not update subscription options. Please try again.'), 'error');
+    }
+  }
+}
+
+
+/******************************************************************************
+ * Helpers                                                                    *
+ ******************************************************************************/
+
+function uc_subscribe_get_attributes() {
+  $attrs = array();
+  $res = db_query("SELECT * FROM {uc_attributes}");
+  while ($obj = db_fetch_object($res)) {
+    $attrs[$obj->aid] = $obj->name;
+  }
+  return $attrs;
+}
+
+function uc_subscribe_date2time($date) {
+  return mktime(23, 59, 59, $date['month'], $date['day'], $date['year']);
+}
+
+function uc_subscribe_time2date($time) {
+  $darray = getdate($time);
+  return array(
+    'year' => $darray['year'],
+    'month' => $darray['mon'],
+    'day' => $darray['mday']);
+}
+
+
+function uc_subscribe_get_username($uid) {
+  $u = user_load(array('uid' => $uid));
+  return $u->name;
+}
+
+function uc_subscribe_get_nodetitle($nid) {
+  $n = node_load($nid);
+  return $n->title;
+}
+
+function uc_subscribe_get_duration($duration) {
+  sscanf($duration, '%d %s', $dnum, $dunit);
+  if (!is_numeric($dnum) || !is_string($dunit)) {
+    return false;
+  }
+  $dunit = strtolower($dunit);
+  $dur = 0;
+  switch ($dunit) {
+    case t('second'):
+    case t('seconds'):
+      $dur = $dnum;
+      break;
+    case t('minute');
+    case t('minutes'):
+      $dur = $dnum * 60;
+      break;
+    case t('hour'):
+    case t('hours'):
+      $dur = $dnum * 60 * 60;
+      break;
+    case t('day'):
+    case t('days'):
+      $dur = $dnum * 60 * 60 * 24;
+      break;
+    case t('week'):
+    case t('weeks'):
+      $dur = $dnum * 60 * 60 * 24 * 7;
+      break;
+    case t('month'):
+    case t('months'):
+      $dur = $dnum * 60 * 60 * 24 * 30;
+      break;
+    case t('year'):
+    case t('years'):
+      $dur = $dnum * 60 * 60 * 24 * 365;
+      break;
+  }
+  return $dur;
+}
+
+function uc_subscribe_period_units_options() {
+  return array(0 => t('--'), 'MN' => t('minute(s)'), 'H' => t('hour(s)'), 'D' => t('day(s)'), 'W' => t('week(s)'), 'M' => t('month(s)'), 'Y' => t('year(s)'));
+}
+
+function uc_subscribe_period_units() {
+  $units = array_keys(uc_subscribe_period_units_options());
+  array_shift($units);
+  
+  return $units;
+}
+
+function uc_subscribe_format_period($period) {
+  $units = uc_subscribe_period_units_options();
+  array_shift($units);
+  
+  if (preg_match("/([0-9]+)(". implode('|', uc_subscribe_period_units()) .")/", $period, $matches)) {
+    $number = $matches[1];
+    $unit   = $matches[2];
+    
+    $result = $number  .' '. $units[$unit];
+  }
+  else {
+    $result = $period;
+  }
+  
+  return $result;
+}
+
+function uc_subscribe_seconds_for_period($number, $unit) {
+  switch ($unit) {
+    case 'MN':
+      $seconds = 60;
+      break;
+    
+    case 'H':
+      $seconds = 60 * 60;
+      break;
+    
+    case 'D':
+      $seconds = 60 * 60 * 24;
+      break;
+    
+    case 'W':
+      $seconds = 60 * 60 * 24 * 7;
+      break;
+    
+    case 'M':
+      $seconds = 60 * 60 * 24 * 31;
+      break;
+    
+    case 'Y':
+      $seconds = 60 * 60 * 24 * 365;
+      break;
+    
+    default:
+      $seconds = 0;
+      break;
+  }
+  
+  return intval($number) * $seconds;
+}

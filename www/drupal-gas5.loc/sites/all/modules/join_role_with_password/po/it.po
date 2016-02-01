@@ -1,0 +1,259 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Join Role With Password\n"
+"POT-Creation-Date: 2008-10-28 10:42+0100\n"
+"PO-Revision-Date: \n"
+"Last-Translator: francesco brunetta <info@francescobrunetta.it>\n"
+"Language-Team: francoud <brunetta@uniud.it>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\n"
+"X-Poedit-Language: Italian\n"
+"X-Poedit-Country: ITALY\n"
+
+#: join_role_with_password.module:25;26
+msgid "Manage role passwords"
+msgstr "Gestisci password per i ruoli"
+
+#: join_role_with_password.module:34
+msgid "Add role password"
+msgstr "Associa una password ad un ruolo"
+
+#: join_role_with_password.module:44
+msgid "Remove role passwords"
+msgstr "Rimuovi password dai ruoli"
+
+#: join_role_with_password.module:54
+msgid "Change role passwords"
+msgstr "Cambia le password dei ruoli"
+
+#: join_role_with_password.module:66
+msgid "Join or leave a role"
+msgstr "Unisciti a un ruolo o abbandonalo"
+
+#: join_role_with_password.module:67
+msgid "Join a role with a password, or leave it"
+msgstr "Unisciti a un ruolo con una password, o abbandonalo"
+
+#: join_role_with_password.module:88
+msgid "Add password to an existing role"
+msgstr "Associa una password ad un ruolo esistente"
+
+#: join_role_with_password.module:101;232;360;477;506;680;711;825
+msgid "Error from the query!"
+msgstr "Errore dalla query!"
+
+#: join_role_with_password.module:105
+msgid "There is no role you can add a password!"
+msgstr "Non c'e' alcun ruolo al quale puoi associare una password!"
+
+#: join_role_with_password.module:127
+msgid "Add a password to this role"
+msgstr "Associa una password a questo ruolo"
+
+#: join_role_with_password.module:129
+msgid "Authorized users will be able to join this role using a password"
+msgstr "Gli utenti autorizzati saranno in grado di unirsi a questo ruolo usando una password"
+
+#: join_role_with_password.module:135;576
+msgid "Insert a password"
+msgstr "Inserisci una password"
+
+#: join_role_with_password.module:136;148
+msgid "Give a password to this role"
+msgstr "Dai una password a questo ruolo"
+
+#: join_role_with_password.module:141
+msgid "Repeat the password"
+msgstr "Ripeti la password"
+
+#: join_role_with_password.module:142
+msgid "Repeat the password again"
+msgstr "Ripeti la password"
+
+#: join_role_with_password.module:169;444
+msgid "Passwords mismatch"
+msgstr "Le password non coincidono"
+
+#: join_role_with_password.module:173;448
+msgid "Invalid password"
+msgstr "Password invalida"
+
+#: join_role_with_password.module:195
+msgid "Password added to role: %role"
+msgstr "Password associata al ruolo: %role"
+
+#: join_role_with_password.module:198;283;325;484;498;636
+msgid "Access denied"
+msgstr "Access negato"
+
+#: join_role_with_password.module:215
+msgid "Remove password from a role"
+msgstr "Rimuovi la password da un ruolo"
+
+#: join_role_with_password.module:235;363;509
+msgid "List of roles with password is empty!"
+msgstr "La lista di ruoli con password e' vuota!"
+
+#: join_role_with_password.module:250;268
+msgid "Remove password from this role"
+msgstr "Rimuovi la password da questo ruolo"
+
+#: join_role_with_password.module:252
+msgid "If you remove password from a role, users will be no more able to join it using a password"
+msgstr "Se rimuovi una password da un ruolo, gli utenti non saranno piu' in grado di unirsi al ruolo usando una password"
+
+#: join_role_with_password.module:266
+msgid "Remove role password"
+msgstr "Rimuovi la password del ruolo"
+
+#: join_role_with_password.module:267;419
+msgid "This action cannot be undone."
+msgstr "Quest'azione non puo' essere annullata"
+
+#: join_role_with_password.module:268;420
+msgid "Cancel"
+msgstr "Annulla"
+
+#: join_role_with_password.module:290;669
+msgid "Invalid role id"
+msgstr "Id del ruolo non valido"
+
+#: join_role_with_password.module:296
+msgid "Severe error: role is not in the table"
+msgstr "Errore grave: il ruolo non e' nella tabella"
+
+#: join_role_with_password.module:318
+msgid "Removed password from role: %role"
+msgstr "Password rimossa dal ruolo: %role"
+
+#: join_role_with_password.module:321
+msgid "Error from query!"
+msgstr "Errore dalla query!"
+
+#: join_role_with_password.module:343
+msgid "Change password for a role"
+msgstr "Cambia la password di un ruolo"
+
+#: join_role_with_password.module:378;420
+msgid "Change password to this role"
+msgstr "Cambla la password di questo ruolo"
+
+#: join_role_with_password.module:380
+msgid "Choose what role to change the password"
+msgstr "Scegli il ruolo al quale cambiare la password"
+
+#: join_role_with_password.module:395
+msgid "New password"
+msgstr "Nuova password"
+
+#: join_role_with_password.module:397
+msgid "You may enter a new password for this role"
+msgstr "Puoi inserire una nuova password per questo ruolo"
+
+#: join_role_with_password.module:401
+msgid "New password again"
+msgstr "Di nuovo la nuova password"
+
+#: join_role_with_password.module:403
+msgid "Enter new password again"
+msgstr "Inserisci ancora la nuova password"
+
+#: join_role_with_password.module:418
+msgid "Change role password"
+msgstr "Cambia la password del ruolo"
+
+#: join_role_with_password.module:480
+msgid "Role %role updated - password changed!"
+msgstr "Ruolo %role aggiornato - password cambiata!"
+
+#: join_role_with_password.module:555
+msgid "Join a role"
+msgstr "Unisciti a un ruolo"
+
+#: join_role_with_password.module:562
+msgid "Join this role"
+msgstr "Unisciti a questo ruolo"
+
+#: join_role_with_password.module:564
+msgid "You can join one of these roles if u know the correct password"
+msgstr "Puoi unirti ad uno di questi ruoli se conosci la password corretta"
+
+#: join_role_with_password.module:577
+msgid "Enter the correct password to join this role"
+msgstr "Inserisci la password corretta per unirti a questo ruolo"
+
+#: join_role_with_password.module:581
+msgid "Leave a role"
+msgstr "Abbandona un ruolo"
+
+#: join_role_with_password.module:588
+msgid "Leave this role"
+msgstr "Abbandona questo ruolo"
+
+#: join_role_with_password.module:590
+msgid "You can leave one of this roles; you dont need to know the password to leave it"
+msgstr "Puoi abbandonare uno di questi ruoli; non hai bisogno di conoscerne la password per abbandonarlo"
+
+#: join_role_with_password.module:610
+msgid "Do it now"
+msgstr "Fallo subito"
+
+#: join_role_with_password.module:652
+msgid "Missing password"
+msgstr "Password mancante"
+
+#: join_role_with_password.module:657
+msgid "Malformed password"
+msgstr "Massword malformata"
+
+#: join_role_with_password.module:662;703
+msgid "Sorry, that role does no more exists"
+msgstr "Spiacente, quel ruolo non esiste piu'"
+
+#: join_role_with_password.module:683
+msgid "You have joined the role: %role_name "
+msgstr "Ti sei unito al ruolo: %role_name"
+
+#: join_role_with_password.module:687
+msgid "Invalid password for role: %role_name"
+msgstr "Password errata per il ruolo: %role_name"
+
+#: join_role_with_password.module:714
+msgid "You have left role: %role"
+msgstr "Hai abbandonato il ruolo: %role"
+
+#: join_role_with_password.module:715;741
+msgid "Invalid call - $role_id does not exist"
+msgstr "Chiamata invalid - $role_id non esiste"
+
+#: join_role_with_password.module:794
+msgid "Password too short"
+msgstr "Password troppo corta"
+
+#: join_role_with_password.module:799
+msgid "Password is blank or empty"
+msgstr "La password e' vuota o formata solo da spazi"
+
+#: join_role_with_password.module:842
+msgid "Database cleanup: role %removed has been removed."
+msgstr "Pulito il database: il ruolo %removed e' stato rimosso."
+
+#: join_role_with_password.module:13
+msgid "administer join_role_with_password"
+msgstr "amministra join_role_with_password"
+
+#: join_role_with_password.module:13
+msgid "May join new role"
+msgstr "Puo' unirsi ad un nuovo ruolo"
+
+#: join_role_with_password.module:0 join_role_with_password.info:0
+msgid "join_role_with_password"
+msgstr ""
+
+#: join_role_with_password.info:0
+msgid "Allows users to join a given role using  a given password."
+msgstr "Consente agli utenti di unirsi a un dato ruolo usando una data password"
+
+

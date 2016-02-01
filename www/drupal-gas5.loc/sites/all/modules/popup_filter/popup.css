@@ -1,0 +1,29 @@
+@CHARSET "UTF-8";
+
+div.popup{ display: inline; position: relative;}
+
+div.popup a.popup-title span{ cursor: pointer;}
+
+div.popup div.popup-positioner{ height: 0; overflow: visible; position: absolute; width: 0;}
+div.popup div.popup-body{ display: none; background: #ffffff; border: 1px solid; position: absolute;}
+
+div.popup-origin-top-left div.popup-positioner{ top: 0; left: 0;}
+div.popup-origin-top-right div.popup-positioner{ top: 0; right: 0;}
+div.popup-origin-bottom-left div.popup-positioner{ bottom: 0; left: 0;}
+div.popup-origin-bottom-right div.popup-positioner{ bottom: 0; right: 0;}
+
+div.popup-expand-top-left div.popup-body{ bottom: 0; right: 0;}
+div.popup-expand-top-right div.popup-body{ bottom: 0; left: 0;}
+div.popup-expand-bottom-left div.popup-body{ top: 0; right: 0;}
+div.popup-expand-bottom-right div.popup-body{ top: 0; left: 0;}
+
+div.popup-menu,
+div.popup-menu div.popup,
+div.popup-menu a.popup-title { display: block;}
+div.popup-body{ width: 150px;}
+div.popup-body a.popup-title{ width: 100%;}
+
+div.popup-menu a.popup-title:hover { background-color: #000099; color: #fff;}
+
+div.popup-menu a.popup-parent { background: url('images/arrow.png') no-repeat right center; padding-right: 10px;}
+div.popup-menu a.popup-parent:hover { background-image: url('images/arrow-hover.png'); background-repeat: no-repeat; background-position: right center;}

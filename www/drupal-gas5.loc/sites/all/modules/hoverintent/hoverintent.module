@@ -1,0 +1,35 @@
+<?php
+// $Id: hoverintent.module,v 1.2 2008/08/27 14:41:03 aaron Exp $
+
+/**
+ *  This will register the plugin with the jQ module.
+ *  To invoke, use jq_add('hoverIntent');
+ */
+function hoverintent_jq($op, $plugin = NULL) {
+  switch ($op) {
+    case 'info':
+      $version = "hoverIntent r5 // 2007.03.27 // jQuery 1.1.2";
+      $url = 'http://plugins.jquery.com/project/hoverIntent';
+      return array(
+        'hoverIntent' => array(
+          'name' => t('hoverIntent'),
+          'description' => t("HoverIntent is similar to jQuery's hover. However, instead of calling onMouseOver and onMouseOut functions immediately, this plugin tracks the user's mouse onMouseOver and waits until it slows down before calling the onMouseOver function... and it will only call the onMouseOut function after an onMouseOver is called."),
+          'version' => $version,
+          'url' => $url,
+          'files' => array(
+            'js' => array(
+              drupal_get_path('module', 'hoverintent') . '/js/jquery.hoverIntent.minified.js',
+            ),
+          ),
+        ),
+      );
+    break;
+  }
+}
+
+/**
+ *  This adds the plugin manually, without going through jQ.
+ */
+function hoverintent_add() {
+  drupal_add_js(drupal_get_path('module', 'hoverintent') . '/js/jquery.hoverIntent.minified.js');
+}

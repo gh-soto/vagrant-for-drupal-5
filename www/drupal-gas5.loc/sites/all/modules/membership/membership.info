@@ -1,0 +1,10 @@
+; $Id: membership.info,v 1.1 2008/02/17 16:50:46 boobaa Exp $
+name = Membership
+description = "Provides easy time-limited membership management."
+version = 5.x
+
+; Information added by drupal.org packaging script on 2008-06-24
+version = "5.x-1.2"
+project = "membership"
+datestamp = "1214308210"
+

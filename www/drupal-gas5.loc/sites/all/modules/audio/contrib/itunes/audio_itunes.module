@@ -1,0 +1,489 @@
+<?php
+// $Id: audio_itunes.module,v 1.3.2.1 2007/05/30 15:52:02 drewish Exp $
+
+define('AUDIO_ITUNES_EXPLICIT_YES', 1);
+define('AUDIO_ITUNES_EXPLICIT_CLEAN', 2);
+
+function audio_itunes_menu($may_cache) {
+  $items = array();
+  if (!$may_cache) {
+    // insert a iTunes tab on views our argument handler 
+    if (user_access('administer views') && 
+        arg(0) == 'admin' &&  arg(1) == 'build' && arg(2) == 'views') {
+      if ($view = views_load_view(arg(3))) {
+        foreach ($view->argument as $index => $argument) {
+          if ($argument['type'] == 'audio_itunes_feed') {
+            $items[] = array(
+              'path' => 'admin/build/views/'. arg(3) .'/itunes',
+              'title' => t('iTunes'),
+              'callback' => 'drupal_get_form',
+              'callback arguments' => array('audio_itunes_channel_form', $view->vid),
+              'type' => MENU_LOCAL_TASK
+            );
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  return $items;
+}
+
+/**
+ * Implementation of hook_form_alter() so we can add our image fields to the 
+ * audio node form.
+ */
+function audio_itunes_form_alter($form_id, &$form) {
+  // We only alter audio node edit forms
+  if ($form_id == 'audio_node_form') {
+    $node = $form['#node'];
+    
+    $form['audio_itunes'] = array(
+      '#type' => 'fieldset', '#title' => t('iTunes feed information'),
+      '#collapsible'=> TRUE,
+      '#description' => t('iTunes specific information.'),
+      '#weight' => 0,
+      '#tree' => TRUE,
+    );
+    $form['audio_itunes']['subtitle'] = array(
+      '#type' => 'textfield', 
+      '#title' => t('Subtitle'),
+      '#default_value' => $node->audio_itunes['subtitle'],
+      '#maxlength' => 255,
+      '#description' => t("The contents of this tag are shown in the Description column in iTunes. The subtitle displays best if it is only a few words long."),
+    );
+    $form['audio_itunes']['summary'] = array(
+      '#type' => 'textarea', 
+      '#title' => t('Summary'),
+      '#default_value' => $node->audio_itunes['summary'],
+      '#maxlength' => 4000,
+      '#rows' => 5,
+      '#description' => t('The contents of this tag are shown in a separate window that appears when the "circled i" in the Description column is clicked. It also appears on the iTunes page for your podcast.'),
+    );
+    $form['audio_itunes']['explicit'] = array(
+      '#type' => 'select', '#title' => t('Explicit'),
+      '#options' => array(0 => 'Unspecified', AUDIO_ITUNES_EXPLICIT_YES => 'Yes', AUDIO_ITUNES_EXPLICIT_CLEAN => 'Clean'),
+      '#default_value' => $node->audio_itunes['explicit'],
+      '#description' => t('If select "yes", an "explicit" parental advisory graphic will appear next to your podcast artwork on the iTunes Music Store, and in the Name column in iTunes. If you select "clean", the parental advisory type is considered Clean, meaning that no explicit language or adult content is included anywhere in the episode, and a "clean" graphic will appear.'),
+    );
+    $form['audio_itunes']['block'] = array(
+      '#type' => 'checkbox', '#title' => t('Block'),
+      '#default_value' => $node->audio_itunes['block'],
+      '#description' => t('Check this to prevent this episode from appearing in the iTunes Podcast directory. For example, you may want a specific episode blocked from iTunes if its content might cause the feed to be removed from iTunes.'),
+    );
+  }
+}
+
+/**
+ * Implementation of hook_nodeapi().
+ */
+function audio_itunes_nodeapi(&$node, $op, $arg) {
+  if ($node->type == 'audio') {
+    switch ($op) {
+      case 'load':
+        $result = db_query("SELECT * FROM {audio_itunes_item} WHERE vid=%d", $node->vid);
+        if ($result) {
+          return array('audio_itunes' => db_fetch_array($result));
+        }
+        break;
+                
+      case 'insert':
+        db_query("INSERT INTO {audio_itunes_item} (vid, summary, subtitle, explicit, block) VALUES (%d, '%s', '%s', %d, %d)",
+          $node->vid, $node->audio_itunes['summary'], $node->audio_itunes['subtitle'], $node->audio_itunes['explicit'], $node->audio_itunes['block']);
+        break;
+        
+      case 'update':
+        // delete and insert rather than updating in case the node doesn't have an existing record 
+        db_query("DELETE FROM {audio_itunes_item} WHERE vid = %d", $node->vid);
+        db_query("INSERT INTO {audio_itunes_item} (vid, summary, subtitle, explicit, block) VALUES (%d, '%s', '%s', %d, %d)",
+          $node->vid, $node->audio_itunes['summary'], $node->audio_itunes['subtitle'], $node->audio_itunes['explicit'], $node->audio_itunes['block']);
+        break;
+        
+      case 'delete':
+        db_query("DELETE FROM {audio_itunes_item} WHERE vid = %d", $node->vid);
+        break;
+        
+      case 'rss item':
+        $ret = array(
+          array('namespace' => array('itunes' => 'xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"')),
+          array('key' => 'itunes:summary', 'value' => $node->audio_itunes['summary']),
+          array('key' => 'itunes:subtitle', 'value' => $node->audio_itunes['subtitle']),
+        );
+        if ($node->audio_itunes['block']) {
+          $ret[] = array('key' => 'itunes:block', 'value' => 'yes');
+        }
+        $ret[] = array(
+          'key' => 'itunes:explicit',
+          'value' => audio_itunes_explicit($node->audio_itunes['explicit'])
+        );
+        // FIXME: first 12 freetaging terms should go into the keywords...
+        return $ret;
+    }
+  }
+}
+
+function audio_itunes_explicit($value) {
+  if ($value == AUDIO_ITUNES_EXPLICIT_YES) {
+    return 'yes';
+  }
+  if ($value == AUDIO_ITUNES_EXPLICIT_CLEAN) {
+    return 'clean';
+  }
+  return 'no';
+}
+
+
+/**
+ * Load an iTunes channel as an array.
+ */
+function audio_itunes_channel_load($view_id) {
+  $channel = db_fetch_array(db_query("SELECT * FROM {audio_itunes_channel} WHERE view_id=%d", $view_id));
+  if (!$channel) {
+    $channel = array();
+  }
+  return $channel;
+}
+
+/**
+ * For for editing the view's channel specific information.
+ */
+function audio_itunes_channel_form($view_id) {
+  $form = array();
+
+  $form['view_id'] = array(
+    '#type' => 'value', 
+    '#value' => $view_id,
+  );
+  
+  $channel = audio_itunes_channel_load($view_id);
+
+  $form['subtitle'] = array(
+    '#type' => 'textfield', 
+    '#title' => t('Subtitle'),
+    '#default_value' => $channel['subtitle'],
+    '#maxlength' => 255,
+    '#description' => t("The contents of this tag are shown in the Description column in iTunes. The subtitle displays best if it is only a few words long."),
+  );
+  $form['summary'] = array(
+    '#type' => 'textarea', 
+    '#title' => t('Summary'),
+    '#default_value' => $channel['summary'],
+    '#maxlength' => 4000,
+    '#rows' => 5,
+    '#description' => t('The contents of this tag are shown in a separate window that appears when the "circled i" in the Description column is clicked. It also appears on the iTunes page for your podcast.'),
+  );
+  $form['author'] = array(
+    '#type' => 'textfield', 
+    '#title' => t('Author'),
+    '#default_value' => $channel['author'],
+    '#maxlength' => 255,
+    '#description' => t("This is shown in the Artist column in iTunes."),
+  );
+  $form['copyright'] = array(
+    '#type' => 'textfield', 
+    '#title' => t('Copyright'),
+    '#default_value' => $channel['copyright'],
+    '#maxlength' => 255,
+    '#description' => t('i.e. "&#xA9; 2005 John Doe"'),
+  );
+  $form['image_url'] = array(
+    '#type' => 'textfield', 
+    '#title' => t('Image URL'),
+    '#default_value' => $channel['image_url'],
+    '#maxlength' => 255,
+    '#description' => t('This specifies the artwork for your podcast. iTunes prefers square .jpg images that are at least 300 x 300 pixels, which is different than what is specified for the standard RSS image tag. iTunes supports images in JPEG and PNG formats. The URL must end in ".jpg" or ".png". If you change your podcast’s image, also change the file’s name. iTunes may not change the image if it checks your feed and the image URL is the same.'),
+  );
+  $form['explicit'] = array(
+    '#type' => 'select', '#title' => t('Explicit'),
+    '#options' => array(0 => 'Unspecified', AUDIO_ITUNES_EXPLICIT_YES => 'Yes', AUDIO_ITUNES_EXPLICIT_CLEAN => 'Clean'),
+    '#default_value' => $channel['explicit'],
+    '#description' => t('If select "yes", an "explicit" parental advisory graphic will appear next to your podcast artwork on the iTunes Music Store, and in the Name column in iTunes. If you select "clean", the parental advisory type is considered Clean, meaning that no explicit language or adult content is included anywhere in the episode, and a "clean" graphic will appear.'),
+  );
+  $form['block'] = array(
+    '#type' => 'checkbox', '#title' => t('Hide'),
+    '#default_value' => $channel['block'],
+    '#description' => t('Check this to prevent the entire podcast from appearing in the iTunes Podcast directory.'),
+  );
+  $form['owner'] = array(
+    '#type' => 'fieldset', 
+    '#title' => t('Owner'),
+    '#collapsible'=> FALSE,
+    '#tree' => FALSE,
+    '#description' => t("Apple uses this information to contact the owner of the podcast for communication specifically about their podcast. It will not be publicly displayed but it may be picked up by spammers."),
+  );
+  $form['owner']['owner_name'] = array(
+    '#type' => 'textfield', 
+    '#title' => t('Name'),
+    '#default_value' => $channel['owner_name'],
+    '#maxlength' => 255,
+  );
+  $form['owner']['owner_email'] = array(
+    '#type' => 'textfield', 
+    '#title' => t('Email'),
+    '#default_value' => $channel['owner_email'],
+    '#maxlength' => 255,
+  );
+  $form['buttons']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save'),
+  );
+  return $form;
+}
+
+function audio_itunes_channel_form_validate($form_id, $values) {
+  if (!empty($values['image_url'])) {
+    if (!valid_url($values['image_url'])) {
+      form_set_error('image_url', t('The image URL must be a valid URL.'));
+    } 
+    else {
+      $url = parse_url($values['image_url']);
+      $ext = strtolower(pathinfo($url['path'], PATHINFO_EXTENSION));
+      if (!isset($url['path']) || ($ext != 'jpg' && $ext != 'png')) {
+        form_set_error('image_url', t('The URL must specify a file ending with <code>.jpg</code> or <code>.png</code>.'));
+      }
+    }
+  }
+  if (!empty($values['owner_email']) && !valid_email_address($values['owner_email'])) {
+    form_set_error('owner_email', t('The owner email must be a valid email address.'));
+  }
+}
+
+function audio_itunes_channel_form_submit($form_id, $values) {
+  if ($values['view_id']) {
+    // delete and insert rather than updating in case the node doesn't have an existing record 
+    db_query("DELETE FROM {audio_itunes_channel} WHERE view_id = %d", $values['view_id']);
+    db_query("INSERT INTO {audio_itunes_channel} (view_id, subtitle, summary, author, copyright, owner_name, owner_email, image_url, block, explicit) VALUES (%d, '%s', '%s', '%s', '%s', '%s', '%s', '%s', %d, %d)",
+      $values['view_id'], $values['subtitle'], $values['summary'], $values['author'], $values['copyright'], $values['owner_name'], $values['owner_email'], $values['image_url'], $values['block'], $values['explicit']);
+  }
+}
+
+function audio_itunes_feed_channel_arguments($view) {
+  $itunes = audio_itunes_channel_load($view->vid);
+
+  $ret = array();
+  if ($itunes['author']) {
+    $ret['itunes:author'] = $itunes['author'];
+  }
+  if ($itunes['image_url']) {
+    $ret[] = array('key' => 'itunes:image', 'attributes' => array('href' => $itunes['image_url']));
+  }
+  if ($itunes['subtitle']) {
+    $ret['itunes:subtitle'] = $itunes['subtitle'];
+  }
+  if ($itunes['summary']) {
+    $ret['itunes:summary'] = $itunes['summary'];
+  }
+  if ($itunes['block']) {
+    $ret['itunes:block'] = 'yes';
+  }
+  if ($itunes['owner_name'] && $itunes['owner_email']) {
+    $ret['itunes:owner']['itunes:name'] = $itunes['owner_name'];
+    $ret['itunes:owner']['itunes:email'] = $itunes['owner_email'];
+  }
+
+  $ret['itunes:explicit'] = audio_itunes_explicit($itunes['explicit']);
+
+  // FIXME: add keywords
+  // FIXME: add categories
+  
+  return $ret;
+}
+
+
+/**
+ * Provide views plugins for the feed types we support.
+ */
+function audio_itunes_views_style_plugins() {
+  return array(
+    'audio_itunes' => array(
+      'name' => t('Views RSS: iTunes RSS feed'),
+      'theme' => 'audio_itunes_feed',
+      'needs_table_header' => TRUE,
+      'needs_fields' => TRUE,
+      'even_empty' => TRUE,
+    ),
+  );
+}
+
+/**
+ * While we support the global selector, some might want to allow
+ * ONLY RSS feeds so we support a stingy selector too
+ */
+function audio_itunes_views_arguments() {
+  $arguments = array(
+    'audio_itunes_feed' => array(
+      'name' => t('iTunes RSS: RSS Feed Selector'),
+      'handler' => 'audio_itunes_arg_handler',
+      'option' => 'string',
+      'help' => t('This argument specifies a specific RSS feed selector; it will only select RSS feeds, unlike the built-in selector which can select pluggable feeds. You may enter the title the feed will advertise in the title field here, and the description of the feed in the option field here.'),
+    ),
+  );
+  return $arguments;
+}
+
+/**
+ * handler for our own RSS argument; mimics the feed selector
+ */
+function audio_itunes_arg_handler($op, &$query, $argtype, $arg = '') {
+  switch($op) {
+    case 'summary':
+    case 'sort':
+    case 'link':
+    case 'title':
+      break;
+    case 'filter':
+      // This is a clone of the default selector, but it just invokes ours
+      // rather than calling all of them.
+      audio_itunes_views_feed_argument('argument', $GLOBALS['current_view'], $arg, $argtype);
+  }
+}
+
+/**
+ * post view for our own op -- mimics the feed selector
+ */
+function audio_itunes_views_post_view($view, $items, $output) {
+  foreach ($view->argument as $id => $argument) {
+    if ($argument['type'] == 'audio_itunes_feed') {
+      $feed = $id;
+      break;
+    }
+  }
+
+  if ($feed !== NULL) {
+    return audio_itunes_views_feed_argument('post_view', $view, 'audio_itunes_feed');
+  }
+}
+
+/**
+ * feed argument hook that will convert us to RSS or display an icon.
+ * the 4th argument isn't part of the hook, but we use it to differentiate
+ * when called as a hook or when called manually from audio_itunes_views_post_view
+ */
+function audio_itunes_views_feed_argument($op, &$view, $arg, $argdata = NULL) {
+  if ($op == 'argument' && $arg == 'feed') {
+    $view->page_type = 'audio_itunes';
+
+    if ($argdata['options']) {
+      $view->description = $argdata['options'];
+    }
+
+    // reset the 'real url' to the URL without the feed argument.
+    $view_args = array();
+    $max = count($view->args);
+    foreach ($view->args as $id => $view_arg) {
+      ++$count;
+      if ($view_arg == $arg && $view->argument[$id]['id'] == $argdata['id']) {
+        if ($count != $max) {
+          $view_args[] = $argdata['wildcard'];
+        }
+      }
+      else {
+        $view_args[] = $view_arg;
+      }
+    }
+    $view->feed_url = views_get_url($view, $view_args);
+  }
+  else if ($op == 'post_view' && $view->build_type != 'block') {
+    $args = views_post_view_make_args($view, $arg, 'feed');
+    $url = views_get_url($view, $args);
+    $title = views_get_title($view, 'page', $args);
+
+    if ($view->used_filters) {
+      $filters = drupal_query_string_encode($view->used_filters);
+    }
+
+    drupal_add_feed(url($url, $filters), $title);
+  }
+}
+
+/**
+ * plugin that actually displays an RSS feed
+ */
+function theme_audio_itunes_feed($view, $nodes, $type) {
+  if ($type == 'block') {
+    return;
+  }
+  global $base_url;
+
+  
+  $channel = array(
+    // a check_plain isn't required on these because format_rss_channel
+    // already does this.
+    'title'       => views_get_title($view, 'page'),
+    'link'        => url($view->feed_url ? $view->feed_url : $view->real_url, NULL, NULL, true),
+    'description' => $view->description,
+  );
+  
+  $item_length = variable_get('feed_item_length', 'teaser');
+  $namespaces = array('xmlns:dc="http://purl.org/dc/elements/1.1/"');
+
+  // Except for the original being a while and this being a foreach, this is
+  // completely cut & pasted from node.module.
+  foreach ($nodes as $node) {
+    // Load the specified node:
+    $item = node_load($node->nid);
+    $link = url("node/$node->nid", NULL, NULL, 1);
+
+    if ($item_length != 'title') {
+      $teaser = ($item_length == 'teaser') ? TRUE : FALSE;
+
+      // Filter and prepare node teaser
+      if (node_hook($item, 'view')) {
+        node_invoke($item, 'view', $teaser, FALSE);
+      }
+      else {
+        $item = node_prepare($item, $teaser);
+      }
+
+      // Allow modules to change $node->teaser before viewing.
+      node_invoke_nodeapi($item, 'view', $teaser, FALSE);
+    }
+
+    // Allow modules to add additional item fields
+    $extra = node_invoke_nodeapi($item, 'rss item');
+    $extra = array_merge($extra, array(array('key' => 'pubDate', 'value' =>  date('r', $item->created)), array('key' => 'dc:creator', 'value' => $item->name), array('key' => 'guid', 'value' => $item->nid . ' at ' . $base_url, 'attributes' => array('isPermaLink' => 'false'))));
+    foreach ($extra as $element) {
+      if ($element['namespace']) {
+        $namespaces = array_merge($namespaces, $element['namespace']);
+      }
+    }
+    
+    // Prepare the item description
+    switch ($item_length) {
+      case 'fulltext':
+        $item_text = $item->body;
+        break;
+      case 'teaser':
+        $item_text = $item->teaser;
+        if ($item->readmore) {
+          $item_text .= '<p>'. l(t('read more'), 'node/'. $item->nid, NULL, NULL, NULL, TRUE) .'</p>';
+        }
+        break;
+      case 'title':
+        $item_text = '';
+        break;
+    }
+
+    $items .= format_rss_item($item->title, $link, $item_text, $extra);
+  }
+
+  $channel_defaults = array(
+    'version'     => '2.0',
+    'title'       => variable_get('site_name', 'drupal') .' - '. variable_get('site_slogan', ''),
+    'link'        => $base_url,
+    'description' => variable_get('site_mission', ''),
+    'language'    => $GLOBALS['locale'],
+  );
+  $channel = array_merge($channel_defaults, $channel);
+
+  $output = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n";
+  $output .= "<rss version=\"". $channel["version"] . "\" xml:base=\"". $base_url ."\" ". implode(' ', $namespaces) .">\n";
+  $output .= format_rss_channel($channel['title'], $channel['link'], $channel['description'], $items, $channel['language'], audio_itunes_feed_channel_arguments($view));
+  $output .= "</rss>\n";
+
+  drupal_set_header('Content-Type: text/xml; charset=utf-8');
+  print $output;
+  module_invoke_all('exit');
+  exit; 
+}

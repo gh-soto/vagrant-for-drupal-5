@@ -1,0 +1,476 @@
+<?php
+// $Id: audio_getid3.module,v 1.23.2.8 2008/05/14 03:43:33 drewish Exp $
+
+include_once drupal_get_path('module', 'audio') .'/audio_image.inc';
+
+define('AUDIO_GETID3_RECOMMEND_VERSION', '1.7.7');
+
+/**
+ * Implementation of hook_help
+ */
+function audio_getid3_help($section) {
+  switch ($section) {
+    case 'admin/help#audio_getid3':
+      $help  = '<p>'. t('The audio_getid3 module enhances the audio module to read and write metadata to and from audio files. ') .'</p>';
+      $help .= '<p>'. t('The module uses the <a href="!elink-www-getid3-org">getID3 library</a> to read and write <a href="!elink-en-wikipedia-org">ID3 tags</a> from the audio file. getID3 can read metadata from a many different audio and video formats giving the audio module a great deal of flexibility.',
+        array('!elink-www-getid3-org' => 'http://www.getid3.org', '!elink-en-wikipedia-org' => 'http://en.wikipedia.org/wiki/Id3')) .'</p>';
+      $help .= t(
+        '<p>You can:</p>
+         <ul>
+            <li>download and install the <em>required</em> getID3 library from <a href="!elink-prdownloads-sourceforge-net">getID3 sourceforge</a> page. Currently, the recommended version of the getID3 library is %recommended-version.</li>
+            <li>administer audio_getid3 module at <a href="!admin-settings-audio-getid3">administer &gt;&gt; site configuration &gt;&gt; audio &gt;&gt; getid3</a>.</li>
+         </ul>',
+         array('!admin-settings-audio-getid3' => url('admin/settings/audio/getid3'), '!elink-prdownloads-sourceforge-net' => 'http://prdownloads.sourceforge.net/getid3', '%recommended-version' => AUDIO_GETID3_RECOMMEND_VERSION));
+      $help .= '<p>'. t('For more information please read the configuration and customization handbook <a href="!audio">Audio page</a>.',
+        array('!audio' => 'http://www.drupal.org/handbook/modules/audio/')) .'</p>';
+      return $help;
+    case 'admin/settings/audio/getid3':
+      $help = '<p>'. t("The audio module uses the getID3 library to read and write ID3 tags. This is not included as part of the module distribution.") .'</p>';
+      $help .= '<p>'. t("To use this module you'll need to <a href='!download-link'>download the library</a> from the <a href='!info-link'>getID3 website</a> and extract the contents into the audio module's getid3 directory. Currently, the recommended version of the getID3 library is %recommended-version.",
+        array('!download-link' => url('http://prdownloads.sourceforge.net/getid3'), '!info-link' => url('http://getid3.org/'), '%recommended-version' => AUDIO_GETID3_RECOMMEND_VERSION)) .'</p>';
+      return $help;
+  }
+}
+
+function audio_getid3_menu($may_cache) {
+  $items = array();
+  if ($may_cache) {
+    $items[] = array('path' => 'admin/settings/audio/getid3',
+      'title' => t('getID3'),
+      'callback' => 'drupal_get_form',
+      'callback arguments' => array('audio_getid3_admin_settings'),
+      'access' => user_access('administer site configuration'),
+      'type' => MENU_LOCAL_TASK);
+  }
+  return $items;
+}
+
+/**
+ * Implements the audio module's hook_audio()
+ */
+function audio_getid3_audio($op, &$node) {
+  switch ($op) {
+    case 'upload':
+      if ($info = audio_read_id3tags($node->audio_file->filepath, TRUE)) {
+        $node->audio_tags = $info['tags'];
+        $node->audio_images = $info['images'];
+        // use array_merge so that the play count and downloadable settings aren't
+        // overwritten.
+        $node->audio_fileinfo = array_merge($node->audio_fileinfo, $info['fileinfo']);
+      }
+      break;
+
+    case 'submit':
+      if (!isset($node->audio_images['new']['filepath'])) {
+        unset($node->audio_images['new']);
+      }
+      break;
+
+    case 'insert':
+    case 'insert revision':
+    case 'update':
+      // update the metadata in the file
+      _audio_getid3_save_to_file($node);
+      break;
+
+    default;
+      return;
+  }
+}
+
+function audio_getid3_admin_settings() {
+  $form['audio_getid3_path'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Path'),
+    '#default_value' => variable_get('audio_getid3_path', drupal_get_path('module', 'audio') .'/getid3/getid3'),
+    '#description' => t("The path to the getID3 library. For example: 'modules/audio/getid3/getid3' or 'sites/default/modules/audio/getid3'"),
+    '#after_build'=> array('_audio_getid3_settings_check_path'),
+  );
+
+  if (audio_getid3_isfound()) {
+    _audio_getid3_load();
+    if (defined('GETID3_VERSION')) {
+      $form['audio_getid3_version'] = array(
+        '#type' => 'item',
+        '#title' => t('Version'),
+        '#value' => '<pre>'. check_plain(GETID3_VERSION) .'</pre>',
+        '#description' => t("If you're seeing this it indicates that the getID3 library was found."),
+      );
+    }
+
+    // Check for existence of the 'demos' folder, contained in the getID3
+    // library. The contents of this folder create a potential securtiy hole,
+    // so we recommend that the user delete it...
+    $getid3_demos_path = variable_get('audio_getid3_path', drupal_get_path('module', 'audio') .'/getid3/getid3') .'/../demos';
+    if (file_exists($getid3_demos_path)) {
+      drupal_set_message(t("Your getID3 library is insecure! The demos distributed with getID3 contains code which creates a huge security hole. Remove the demos directory (%path) from beneth Drupal's directory.", array('%path' => realpath($getid3_demos_path))), 'error');
+    }
+  }
+  $form['audio_getid3_show_warnings'] = array(
+    '#type' => 'checkbox',
+    '#title' => t("Display warnings"),
+    '#default_value' => variable_get('audio_getid3_show_warnings', FALSE),
+    '#description' => t("Check this to display the warning messages from the getID3 library when reading and writing ID3 tags. Generally it's a good idea to leave this unchecked, getID3 reports warnings for several trivial problems and the warnings can be confusing to users. This setting can be useful when debugging problems with the ID3 tags."),
+  );
+
+  return system_settings_form($form);
+}
+
+/**
+ * Edit the audio node form and insert our file info stuff.
+ */
+function audio_getid3_form_alter($form_id, &$form) {
+  // We only alter audio node edit forms
+  if ($form_id == 'audio_node_form' && isset($form['#node']->audio_file)) {
+    $node = $form['#node'];
+
+    // file info
+    $form['audio_fileinfo']['#theme'] = 'audio_getid3_fileinfo_form';
+    $form['audio_fileinfo']['#description'] = t('This file information was loaded from the file by the getID3 library.');
+
+    // refresh the meta data everytime they display the edit form
+    $info = audio_read_id3tags($node->audio_file->filepath, FALSE);
+
+    // put the fields on the form as hidden values so there's a copy for the preview
+    $fields = array('fileformat', 'filesize', 'playtime', 'sample_rate', 'channel_mode', 'bitrate', 'bitrate_mode');
+    foreach ($fields as $key) {
+      $form['audio_fileinfo'][$key] = array(
+        '#type' => 'hidden',
+        '#default_value' => $info['fileinfo'][$key],
+      );
+    }
+
+    $form['audio_fileinfo']['display_fileformat'] = array(
+      '#type' => 'item', '#title' => t('Format'),
+      '#value' => $info['fileinfo']['fileformat'],
+    );
+    $form['audio_fileinfo']['display_filesize'] = array(
+      '#type' => 'item', '#title' => t('File Size'),
+      '#value' => t('@filesize bytes', array('@filesize' => number_format($info['fileinfo']['filesize']))),
+    );
+    $form['audio_fileinfo']['display_playtime'] = array(
+      '#type' => 'item', '#title' => t('Length'),
+      '#value' => $info['fileinfo']['playtime'],
+    );
+    $form['audio_fileinfo']['display_sample_rate'] = array(
+      '#type' => 'item', '#title' => t('Sample rate'),
+      '#value' => t('@samplerate Hz', array('@samplerate' => number_format($info['fileinfo']['sample_rate']))),
+    );
+    $form['audio_fileinfo']['display_channel_mode'] = array(
+      '#type' => 'item', '#title' => t('Channel mode'),
+      '#value' => ucfirst($info['fileinfo']['channel_mode']),
+    );
+    $form['audio_fileinfo']['display_bitrate'] = array(
+      '#type' => 'item', '#title' => t('Bitrate'),
+      '#value' => t('@bitrate bytes/second', array('@bitrate' => number_format($info['fileinfo']['bitrate']))),
+    );
+    $form['audio_fileinfo']['display_bitrate_mode'] = array(
+      '#type' => 'item', '#title' => t('Bitrate mode'),
+      '#value' => strtoupper($info['fileinfo']['bitrate_mode']),
+    );
+
+    // check that the audio is compatible with flash (mp3 with sample rate of
+    // 11, 22, or 44 khz). if it is not, display a warning.
+    switch ($info['fileinfo']['sample_rate']) {
+      case '44100': case '22050': case '11025':
+        if ($info['fileinfo']['fileformat'] == 'mp3') {
+          break;
+        }
+      default:
+        drupal_set_message(t('This file is not compatible with the Flash audio player. Flash can only play MP3 files with a sample rate of 11, 22 or 44KHz.'), 'status');
+    }
+  }
+}
+
+function theme_audio_getid3_fileinfo_form($form) {
+  $header = array();
+  $rows = array();
+
+  // if we've got a file...
+  if (isset($form['fileformat'])) {
+    $row = array();
+    // pull our items out of the form and put them into a table
+    foreach (element_children($form) as $key) {
+      if ($form[$key]['#type'] == 'item') {
+        $rows[] = array(
+          array('data' => $form[$key]['#title'], 'header' => TRUE),
+          $form[$key]['#value'],
+        );
+
+        $header[] = $form[$key]['#title'];
+        $data[] = $form[$key]['#value'];
+        unset($form[$key]);
+      }
+    }
+    $attributes = array('class' => 'watchdog-event');
+    $output = theme('table', array(), $rows, $attributes);
+
+    return $output . drupal_render($form);
+  }
+}
+
+/**
+ * Checks the that the directory in $form_element exists and contains a file
+ * named 'getid3php'. If validation fails, the form element is flagged with an
+ * error from within the file_check_directory function. See:
+ * system_check_directory()
+ *
+ * @param $form_element
+ *   The form element containing the name of the directory to check.
+ */
+function _audio_getid3_settings_check_path($form_element) {
+  $path = $form_element['#value'];
+  if (!is_dir($path) || !audio_getid3_isfound($path, FALSE)) {
+    form_set_error($form_element['#parents'][0], t('The getID3 files <em>getid3.php</em> and <em>write.php</em> could not be found in the %path directory.', array('%path' => $path)));
+  }
+  return $form_element;
+}
+
+/**
+ * Can we find and (hopefully) load the getID3 library?
+ *
+ * @param $getid3_path
+ *   optional path to the getid3 directory with write.php in it.
+ * @param $report_error
+ *   boolean indicating if an error should be set if getID3 can't be found.
+ * @return
+ *   Boolean indicating if the library was found
+ */
+function audio_getid3_isfound($getid3_path = NULL, $report_error = FALSE) {
+  if (is_null($getid3_path)) {
+    $getid3_path = variable_get('audio_getid3_path', drupal_get_path('module', 'audio') .'/getid3/getid3');
+  }
+  if (file_exists($getid3_path .'/getid3.php') && file_exists($getid3_path .'/write.php')) {
+    return TRUE;
+  }
+  if ($report_error) {
+    drupal_set_message(
+      t("The Audio getid3 module cannot find the getID3 library used to read and write ID3 tags. The site administrator will need to verify that it is installed and then update the <a href='!admin-settings-audio-getid3'>settings</a>.",
+        array('!admin-settings-audio-getid3' => url('admin/settings/audio/getid3'))
+      ),
+      'error'
+    );
+  }
+  return FALSE;
+}
+
+
+/**
+ * Build a getID3 object.
+ *
+ * @return
+ *   a getID3 object.
+ */
+function _audio_getid3_load() {
+  $path = variable_get('audio_getid3_path', drupal_get_path('module', 'audio') .'/getid3/getid3');
+  if (!audio_getid3_isfound($path, TRUE)) {
+    return NULL;
+  }
+
+  // Little workaround for getID3 on windows.
+  define('GETID3_HELPERAPPSDIR', realpath($path .'/../helperapps') .'/');
+
+  require_once($path .'/getid3.php');
+  $getID3 = new getID3;
+  $getID3->encoding         = 'UTF-8';
+  $getID3->encoding_id3v1   = 'ISO-8859-1';
+  $getID3->option_tags_html = FALSE;
+
+  // Initialize getID3 tag-writing module. NOTE: Their wanky dependency setup
+  // requires that this file must be included AFTER an instance of the getID3
+  // class has been instantiated.
+  require_once($path .'/write.php');
+
+  return $getID3;
+}
+
+/**
+ * Uses getID3 to get information about an audio file...
+ *
+ * @param $filepath
+ *   string full path to audio file to examine
+ * @param $load_pics
+ *   boolean indicating if embedded images should be saved to temp files and
+ *   returned in a sub array 'images'.
+ * @return
+ *   array with two sub arrays keyed to 'tags' and 'fileinfo', or FALSE if
+ *   there's an error.
+ */
+function audio_read_id3tags($filepath, $load_pics = FALSE) {
+  $getID3 = _audio_getid3_load();
+  if (!$getID3) {
+    // getid3 isn't setup correctly. an error should have already been printed
+    // so just return.
+    return FALSE;
+  }
+
+  // Analyze file
+  $info = $getID3->analyze($filepath);
+
+  // copy out the basic file info
+  $ret = array(
+    'tags' => array(),
+    'images' => array(),
+    'fileinfo' => array(
+      'fileformat'   => $info['fileformat'],
+      'filesize'     => $info['filesize'],
+      'mimetype'     => $info['mime_type'],
+      'playtime'     => $info['playtime_string'],
+      'bitrate'      => $info['audio']['bitrate'],
+      'bitrate_mode' => $info['audio']['bitrate_mode'],
+      'channel_mode' => $info['audio']['channelmode'],
+      'sample_rate'  => $info['audio']['sample_rate'],
+    ),
+  );
+
+  // First read in the id3v1 tags then overwrite them with the v2 tags. 
+  foreach (array('id3v1', 'id3v2') as $format) {
+    if (isset($info['tags'][$format])) {
+      foreach ((array) $info['tags'][$format] as $key => $value ) {
+        $ret['tags'][$key] = array_pop(str_replace("\0", '', $value));
+      }
+    }
+  }
+
+  // copy the images
+  if ($load_pics) {
+    // check both flavors id3v2 image tags
+    foreach (array('PIC', 'APIC') as $type) {
+      if (isset($info['id3v2'][$type])) {
+        foreach ((array)$info['id3v2'][$type] as $image) {
+          $pictype = $image['picturetypeid'];
+          // get a temp filename
+          if ($image_filepath = _audio_image_filename(basename($filepath), $image['mime'], $pictype, TRUE)) {
+            // save it to the temp file
+            if ($image_filepath = file_save_data($image['data'], $image_filepath, FILE_EXISTS_RENAME)) {
+              $ret['images'][] = audio_image_from_file($image_filepath, $pictype);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // warnings
+  if (!empty($info['warning']) && variable_get('audio_getid3_show_warnings', FALSE)) {
+    $warning = t('While reading the ID3 tags, the following warnings were encountered:');
+    $warning .= '<ul><li>'. implode('</li><li>', $info['warning']) .'</li></ul>';
+    drupal_set_message($warning, 'error');
+  }
+  // report errors and then exit
+  if (isset($info['error'])) {
+    $error = t("The following errors where encountered while reading the file's ID3 tags: ");
+    $error .= '<ul><li>'. implode('</li><li>', $info['error']) .'</li></ul>';
+    form_set_error('', $error);
+  }
+
+  return $ret;
+}
+
+/**
+ * Uses the getID3 library to write updated ID3 tag information back to the
+ * actual audio file. This function will write over any exisitng ID3 tag
+ * information contained in the file, and this function does not make a copy of
+ * this information anywhere...
+ * @param $filepath
+ *   Path to the audio file where the tags should be written.
+ * @param $tags
+ *   Array of metadata tags to write.
+ * @param $images
+ *   Array of images from the audio_images.module.
+ * @param $tagformats
+ *   Array of the names of tag formats to write.
+ * @return
+ *   FALSE on error.
+ */
+function audio_write_id3tags($filepath, $tags, $images = array(), $tagformats = array('id3v1', 'id3v2.3')) {
+  $getID3 = _audio_getid3_load();
+  if (!$getID3) {
+    // getid3 isn't setup correctly. an error should have already been printed
+    // so just return.
+    return FALSE;
+  }
+
+  $tagwriter = new getid3_writetags;
+  $tagwriter->filename          = $filepath;
+  $tagwriter->tagformats        = $tagformats;
+  $tagwriter->tag_encoding      = 'UTF-8';
+  $tagwriter->overwrite_tags    = TRUE;
+  $tagwriter->remove_other_tags = TRUE;
+
+  // to prevent annoying warning/errors, add in empty id3v1 tags. see
+  // http://drupal.org/node/56589 or http://drupal.org/node/84029 for details.
+  $tagwriter->tag_data = array(
+    'title' => array(),
+    'artist' => array(),
+    'album' => array(),
+    'track' => array(),
+    'genre' => array(),
+    'year' => array(),
+    'comment' => array(),
+  );
+
+  // copy our tag data ...
+  foreach ($tags as $tag => $value) {
+    $tagwriter->tag_data[$tag][] = $value;
+  }
+  // ... and images to the writer.
+  foreach ((array) $images as $image) {
+    $tagwriter->tag_data['attached_picture'][] = array(
+      'data' => file_get_contents($image['filepath']),
+      'picturetypeid' => $image['pictype'],
+      'description' => audio_image_type_dirty_array($image['pictype']),
+      'mime' => $image['filemime'],
+    );
+  }
+
+  $tagwriter->WriteTags();
+
+  // check for and display errors
+  if (!empty($tagwriter->warnings) && variable_get('audio_getid3_show_warnings', FALSE)) {
+    $warning = t('While writing the ID3 tags, the following warnings were encountered:');
+    $warning .= '<ul><li>'. implode('</li><li>', $tagwriter->warnings) .'</li></ul>';
+    drupal_set_message($warning, 'error');
+  }
+  if (!empty($tagwriter->errors)) {
+    $error = t('The following errors were encountered, preventing the ID3 tags from being saved:');
+    $error .= '<ul><li>'. implode('</li><li>', $tagwriter->errors) .'</li></ul>';
+    form_set_error('', $error);
+    return FALSE;
+  }
+}
+
+/**
+ * Save the node's ID3 tags to the file. The tags will be saved and then
+ * reloaded so that the node reflects the allowed values.
+ */
+function _audio_getid3_save_to_file(&$node) {
+  $settings = audio_get_tag_settings();
+
+  // prepare a list of tags to be written to the file
+  $tags = array();
+  foreach ($node->audio_tags as $tag => $value) {
+    if ($settings[$tag]['writetofile']) {
+      // try and remove weird null characters generated by getid3. see issue # 186801
+      $tags[$tag] = str_replace("\0", '', $value);
+    }
+  }
+
+  // if there are any tags left, update the tags in the file
+  if ($tags) {
+    if (preg_match('/\.ogg$/i', $node->audio_file->filepath)) {
+      $tagformats = array('vorbiscomment');
+    }
+    else {
+      $tagformats = array('id3v1', 'id3v2.3');
+    }
+    audio_write_id3tags($node->audio_file->filepath, $tags, $node->audio_images, $tagformats);
+  }
+
+  // then reload them so that the node is in sync with the file/database...
+  $info = audio_read_id3tags($node->audio_file->filepath);
+  // ...merge so that any non-written tags will be preserved...
+  $node->audio_tags = array_merge($node->audio_tags, $info['tags']);
+  // ...merge so that the playcount and downloadable options aren't overwritten.
+  $node->audio_fileinfo = array_merge($node->audio_fileinfo, $info['fileinfo']);
+}

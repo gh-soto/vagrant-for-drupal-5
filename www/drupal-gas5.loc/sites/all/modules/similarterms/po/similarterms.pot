@@ -1,0 +1,314 @@
+
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<!-- ViewVC :: http://www.viewvc.org/ -->
+<head>
+<title>[drupal] Log of /contributions/modules/similarterms/po/similarterms.pot</title>
+<meta name="generator" content="ViewVC 1.0.4" />
+<link rel="stylesheet" href="/viewvc.py/*docroot*/styles.css" type="text/css" />
+
+</head>
+<body>
+<div class="vc_navheader">
+
+<form method="get" action="/viewvc.py/">
+
+<table style="padding:0.1em;">
+<tr>
+<td>
+<strong>
+
+<a href="/viewvc.py/drupal/">
+
+[drupal]</a>
+/
+
+<a href="/viewvc.py/drupal/contributions/">
+
+contributions</a>
+/
+
+<a href="/viewvc.py/drupal/contributions/modules/">
+
+modules</a>
+/
+
+<a href="/viewvc.py/drupal/contributions/modules/similarterms/">
+
+similarterms</a>
+/
+
+<a href="/viewvc.py/drupal/contributions/modules/similarterms/po/">
+
+po</a>
+/
+
+
+
+similarterms.pot
+
+
+</strong>
+
+</td>
+<td style="text-align:right;">
+
+
+<strong>Repository:</strong>
+<select name="root" onchange="submit()">
+
+
+<option value="*viewroots*">Repository Listing</option>
+
+
+
+
+
+
+
+
+
+
+<optgroup label="CVS Repositories"><option selected="selected">drupal</option></optgroup>
+
+
+</select>
+<input type="submit" value="Go" />
+
+</td>
+</tr>
+</table>
+
+</form>
+
+</div>
+<div style="float: right; padding: 5px;"><a href="http://www.viewvc.org/"><img src="/viewvc.py/*docroot*/images/logo.png" alt="ViewVC logotype" width="128" height="48" /></a></div>
+<h1>Log of /contributions/modules/similarterms/po/similarterms.pot</h1>
+
+<p style="margin:0;">
+
+<a href="/viewvc.py/drupal/contributions/modules/similarterms/po/"><img src="/viewvc.py/*docroot*/images/back_small.png" width="16" height="16" alt="Parent Directory" /> Parent Directory</a>
+
+
+
+
+</p>
+
+<hr />
+<table class="auto">
+
+
+
+<tr>
+<td>Links to HEAD:</td>
+<td>
+(<a href="/viewvc.py/drupal/contributions/modules/similarterms/po/similarterms.pot?view=markup">view</a>)
+(<a href="/viewvc.py/drupal/contributions/modules/similarterms/po/similarterms.pot?view=co">download</a>)
+
+(<a href="/viewvc.py/drupal/contributions/modules/similarterms/po/similarterms.pot?view=annotate">annotate</a>)
+</td>
+</tr>
+
+
+
+<tr>
+<td>Sticky Tag:</td>
+<td><form method="get" action="/viewvc.py/drupal/contributions/modules/similarterms/po/similarterms.pot" style="display: inline">
+<div style="display: inline">
+<input type="hidden" name="view" value="log" />
+
+
+<select name="pathrev" onchange="submit()">
+<option value=""></option>
+
+<optgroup label="Branches">
+
+
+<option>MAIN</option>
+
+
+</optgroup>
+
+<optgroup label="Non-branch tags">
+
+
+<option>HEAD</option>
+
+
+</optgroup>
+
+</select>
+
+<input type="submit" value="Set" />
+</div>
+</form>
+
+</td>
+</tr>
+</table>
+ 
+
+
+
+
+
+
+
+
+<div>
+<hr />
+
+<a name="rev1.1"></a>
+<a name="HEAD"></a>
+
+
+Revision <strong>1.1</strong> -
+
+(<a href="/viewvc.py/drupal/contributions/modules/similarterms/po/similarterms.pot?revision=1.1&amp;view=markup">view</a>)
+
+(<a href="/viewvc.py/drupal/contributions/modules/similarterms/po/similarterms.pot?revision=1.1">download</a>)
+
+(<a href="/viewvc.py/drupal/contributions/modules/similarterms/po/similarterms.pot?annotate=1.1">annotate</a>)
+
+
+
+- <a href="/viewvc.py/drupal/contributions/modules/similarterms/po/similarterms.pot?r1=1.1&amp;view=log">[select for diffs]</a>
+
+
+
+
+<br />
+
+<em>Mon Jun 30 03:15:39 2008 UTC</em> (5 minutes, 1 second ago) by <em>rmiddle</em>
+
+
+<br />Branch:
+
+<a href="/viewvc.py/drupal/contributions/modules/similarterms/po/similarterms.pot?view=log&amp;pathrev=MAIN"><strong>MAIN</strong></a>
+
+
+
+<br />CVS Tags:
+
+<a href="/viewvc.py/drupal/contributions/modules/similarterms/po/similarterms.pot?view=log&amp;pathrev=HEAD"><strong>HEAD</strong></a>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<pre class="vc_log">[#171499] Added partial German Translation.
+</pre>
+</div>
+
+ 
+
+
+
+ <hr />
+<p><a name="diff"></a>
+This form allows you to request diffs between any two revisions of this file.
+For each of the two "sides" of the diff,
+
+select a symbolic revision name using the selection box, or choose
+'Use Text Field' and enter a numeric revision.
+
+</p>
+<form method="get" action="/viewvc.py/drupal/contributions/modules/similarterms/po/similarterms.pot" id="diff_select">
+<table cellpadding="2" cellspacing="0" class="auto">
+<tr>
+<td>&nbsp;</td>
+<td>
+<input type="hidden" name="view" value="diff" />
+Diffs between
+
+<select name="r1">
+<option value="text" selected="selected">Use Text Field</option>
+
+<option value="1.1:MAIN">MAIN</option>
+
+<option value="1.1:HEAD">HEAD</option>
+
+</select>
+<input type="text" size="12" name="tr1"
+value="1.1"
+onchange="document.getElementById('diff_select').r1.selectedIndex=0" />
+
+and
+
+<select name="r2">
+<option value="text" selected="selected">Use Text Field</option>
+
+<option value="1.1:MAIN">MAIN</option>
+
+<option value="1.1:HEAD">HEAD</option>
+
+</select>
+<input type="text" size="12" name="tr2"
+value="1.1"
+onchange="document.getElementById('diff_select').r2.selectedIndex=0" />
+
+</td>
+</tr>
+<tr>
+<td>&nbsp;</td>
+<td>
+Type of Diff should be a
+<select name="diff_format" onchange="submit()">
+<option value="h" selected="selected">Colored Diff</option>
+<option value="l" >Long Colored Diff</option>
+<option value="u" >Unidiff</option>
+<option value="c" >Context Diff</option>
+<option value="s" >Side by Side</option>
+</select>
+<input type="submit" value=" Get Diffs " />
+</td>
+</tr>
+</table>
+</form>
+
+
+<form method="get" action="/viewvc.py/drupal/contributions/modules/similarterms/po/similarterms.pot">
+<div>
+<hr />
+<a name="logsort"></a>
+<input type="hidden" name="view" value="log" />
+Sort log by:
+<select name="logsort" onchange="submit()">
+<option value="cvs" >Not sorted</option>
+<option value="date" selected="selected">Commit date</option>
+<option value="rev" >Revision</option>
+</select>
+<input type="submit" value=" Sort " />
+</div>
+</form>
+
+
+<hr />
+<table>
+<tr>
+<td><address></address></td>
+<td style="text-align: right;"><strong><a href="/viewvc.py/*docroot*/help_log.html">ViewVC Help</a></strong></td>
+</tr>
+<tr>
+<td>Powered by <a href="http://viewvc.tigris.org/">ViewVC 1.0.4</a></td>
+<td style="text-align: right;">&nbsp;</td>
+</tr>
+</table>
+</body>
+</html>
+
+

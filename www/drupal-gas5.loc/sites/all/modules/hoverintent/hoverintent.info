@@ -1,0 +1,10 @@
+; $Id: hoverintent.info,v 1.3 2008/08/27 14:41:03 aaron Exp $
+name = "hoverIntent"
+description = "Wrapper for the hoverIntent jQuery Plugin."
+dependencies = jquery_update
+package = User interface
+; Information added by drupal.org packaging script on 2008-08-28
+version = "5.x-1.x-dev"
+project = "hoverintent"
+datestamp = "1219881948"
+

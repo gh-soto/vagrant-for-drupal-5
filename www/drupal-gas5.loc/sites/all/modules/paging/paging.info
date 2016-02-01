@@ -1,0 +1,7 @@
+; $Id: paging.info,v 1.1.2.1 2006/12/12 02:47:25 Gurpartap Exp $
+name = Paging
+description = Allow users to use a tag to break a node up, for specified content types, into multiple pages.
+; Information added by drupal.org packaging script on 2006-12-12
+version = "5.x-1.0"
+project = "paging"
+

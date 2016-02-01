@@ -1,0 +1,18 @@
+; $Id: jq_bridge.info,v 1.4 2008/05/04 19:03:24 aaron Exp $
+name = "jQ Bridge"
+description = "Adds jQ support to several jQuery wrapper modules, including jCarousel."
+dependencies = jq
+package = User Interface
+
+; Information added by drupal.org packaging script on 2008-05-02
+version = "6.x-1.x-dev"
+core = "6.x"
+project = "jq"
+datestamp = "1209686829"
+
+
+; Information added by drupal.org packaging script on 2008-05-05
+version = "5.x-1.x-dev"
+project = "jq"
+datestamp = "1209946117"
+

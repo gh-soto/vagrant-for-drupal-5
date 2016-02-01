@@ -1,0 +1,325 @@
+<?php
+//$Id: views_node_feed.module,v 1.1.2.1 2008/08/05 22:08:49 andrewlevine Exp $
+
+/*
+ * This module was ripped from views_rss and modified
+ */
+
+function views_node_feed_menu($may_cache) {
+  $items = array();
+  if ($may_cache) {
+   $items[] = array(
+      'path' => 'admin/settings/views_node_feed',
+      'title' => t('Views Node Feed'),
+      'description' => t('Manage Different Types of Node Feeds'),
+      'access' => user_access('administer views'),
+      'callback' => 'views_node_feed_admin_settings',
+      'type' => MENU_NORMAL_ITEM,
+    );
+  }
+  else {
+    $items[] = array(
+      'path' => 'admin/settings/views_node_feed/edit/' . arg(4),
+      'title' => t('!op Node Feed', array('!op' => arg(4) === 'new' ? t('Add') : t('Edit'))),
+      'access' => user_access('administer views'),
+      'callback' => 'drupal_get_form',
+      'callback arguments' => array('views_node_feed_edit_form', arg(4)),
+      'type' => MENU_CALLBACK,
+    );
+    $items[] = array(
+      'path' => 'admin/settings/views_node_feed/delete/' . arg(4),
+      'title' => t('Delete Node Feed'),
+      'access' => user_access('administer views'),
+      'callback' => 'drupal_get_form',
+      'callback arguments' => array('views_node_feed_delete_form', arg(4)),
+      'type' => MENU_CALLBACK,
+    );
+  }
+  return $items;
+}
+
+
+function views_node_feed_admin_settings() {
+  $feeds = views_node_feed_get_feeds();
+  return theme('views_node_feed_admin', $feeds);
+}
+
+function views_node_feed_edit_form($ident) {
+  $new = $ident === 'new';
+  if (!$new) {
+    if (views_node_feed_valid_identifier($ident)) {
+      $feed = views_node_feed_get_feeds($ident);
+    }
+    if (!$feed) {
+      drupal_not_found();
+      exit;
+    }
+  }
+  $form = array();
+  $form['new'] = array(
+    '#type' => 'value',
+    '#value' => $new,
+  );
+  $form['identifier'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Feed identifier'),
+    '#description' => t('Name with which you will identify this node feed. Only letters, numbers and underscores allowed.'),
+    '#maxlength' => 50,
+    '#required' => TRUE,
+    '#default_value' => $new ? '' : $ident,
+  );
+  $form['wrapper'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Wrapper Template'),
+    '#description' => t('Template that will be placed around the list of nodes. Be sure to include the string ***VIEWS_NODE_FEED_ITEMS*** which will automatically be replaced with the necessary items. The variables $view, $nodes, and $type will be available.'),
+    '#default_value' => $new ? '***VIEWS_NODE_FEED_ITEMS***' : $feed['wrapper'], 
+    '#required' => FALSE,
+  );
+  $form['node'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Node template'),
+    '#description' => t('Template that will be generated for each node. The variables $view, $nodes, $node, and $type will be available.'),
+    '#default_value' => $new ? '<?php print $node->title; ?><br/>' : $feed['node'], 
+    '#required' => FALSE,
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save'),
+  );
+  return $form;
+}
+
+function views_node_feed_edit_form_validate($form_id, $form_values) {
+  if (!views_node_feed_valid_identifier($form_values['identifier'])) {
+    form_set_error('identifier', t('Invalid feed identifier'));
+  }
+  $feeds = views_node_feed_get_feeds();
+  if ($form_values['new'] && in_array($form_values['identifier'], $feeds)) {
+    form_set_error('identifier', t('Feed identifier already exists.'));
+  }
+}
+
+function views_node_feed_edit_form_submit($form_id, $form_values) {
+  $val = array(
+    'identifier' => $form_values['identifier'],
+    'wrapper' => $form_values['wrapper'],
+    'node' => $form_values['node']
+  );
+  $ident = $form_values['identifier'];
+  $feeds = views_node_feed_get_feeds();
+  $feeds[$ident] = $ident;
+  variable_set("views_node_feed_$ident", $val);
+  variable_set("views_node_feed_feeds", $feeds);
+  
+  drupal_set_message(t('Node feed %feed updated', array('%feed' => $ident)));
+  return 'admin/settings/views_node_feed';
+}
+
+function views_node_feed_delete_form($ident) {
+  $feeds = views_node_feed_get_feeds();
+  if (!in_array($ident, $feeds)) {
+    drupal_not_found();
+    exit;
+  }
+  $form['identifier'] = array('#type' => 'value', '#value' => $ident);
+  $form['#redirect'] = 'admin/settings/views_node_feed';
+  return confirm_form($form,
+    t('Delete the node feed %feed?', array('%feed' => $ident)),
+    'admin/settings/views_node_feed',
+    t('This will delete the node feed %feed.', array('%feed' => $ident)),
+    t('Delete'), t('Cancel'));
+}
+
+function views_node_feed_delete_form_submit($form_id, $form_values) {
+  $feeds = views_node_feed_get_feeds();
+  $ident = $form_values['identifier'];
+  unset($feeds[$ident]);
+  variable_del("views_node_feed_$ident");
+  variable_set("views_node_feed_feeds", $feeds);
+  drupal_set_message(t('Node feed %feed deleted.', t(array('%feed' => $ident))));
+}
+
+function views_node_feed_valid_identifier($ident) {
+  $ident = (string)$ident;
+  if (strlen($ident) <=0 || strlen($ident) > 50) {
+    return FALSE;
+  }
+  $new = preg_replace('/[^a-zA-Z0-9_]/', '', $ident);
+  if ($new !== $ident) {
+    return FALSE;
+  }
+  return TRUE;
+}
+
+function views_node_feed_get_feeds($ident = NULL) {
+  if ($ident === NULL) {
+    return variable_get("views_node_feed_feeds", array());
+  }
+  else {
+    return variable_get("views_node_feed_$ident", FALSE);
+  }
+}
+
+/**
+ * Provide views plugins for the feed types we support.
+ */
+function views_node_feed_views_style_plugins() {
+  return array(
+    'views_node_feed' => array(
+      'name' => t('Views Node Feed: Node feed'),
+      'theme' => 'views_node_feed',
+      'needs_table_header' => TRUE,
+      'needs_fields' => TRUE,
+      'even_empty' => TRUE,
+    ),
+  );
+}
+
+/**
+ * While we support the global selector, some might want to allow
+ * ONLY RSS feeds so we support a stingy selector too
+ */
+function views_node_feed_views_arguments() {
+  $feeds = views_node_feed_get_feeds();
+  $arguments = array(
+    'views_node_feed' => array(
+      'name' => t('Node: Views Node Feed Selector'),
+      'handler' => 'views_handler_arg_node_feed_feed',
+      'option' => array(
+        '#type' => 'select',
+        '#options' => $feeds,
+      ),
+      'help' => t('This argument specifies a specific Node feed selector; it will only select Node feeds, unlike the built-in selector which can select pluggable feeds. You may enter the title the feed will advertise in the title field here, and the description of the feed in the option field here.'),
+    ),
+  );
+  return $arguments;
+}
+
+/**
+ * handler for our own RSS argument; mimics the feed selector
+ */
+function views_handler_arg_node_feed_feed($op, &$query, $argtype, $arg = '') {
+  switch($op) {
+    case 'summary':
+    case 'sort':
+    case 'link':
+    case 'title':
+      break;
+    case 'filter':
+      // This is a clone of the default selector, but it just invokes ours
+      // rather than calling all of them.
+      views_node_feed_views_feed_argument('argument', $GLOBALS['current_view'], $arg, $argtype);
+  }
+}
+
+/**
+ * post view for our own op -- mimics the feed selector
+ */
+function views_node_feed_views_post_view($view, $items, $output) {
+  foreach ($view->argument as $id => $argument) {
+    if ($argument['type'] == 'views_node_feed') {
+      $feed = $id;
+      break;
+    }
+  }
+
+  if ($feed !== NULL) {
+    return views_node_feed_views_feed_argument('post_view', $view, 'node_feed');
+  }
+}
+
+/**
+ * feed argument hook that will convert us to RSS or display an icon.
+ * the 4th argument isn't part of the hook, but we use it to differentiate
+ * when called as a hook or when called manually from views_rss_views_post_view
+ */
+function views_node_feed_views_feed_argument($op, &$view, $arg, $argdata = NULL) {
+  if ($op == 'argument' && $arg == 'node_feed') {
+    $view->page_type = 'views_node_feed';
+
+    if ($argdata['options']) {
+      $view->node_feed_type = $argdata['options'];
+    }
+
+    // reset the 'real url' to the URL without the feed argument.
+    $view_args = array();
+    $max = count($view->args);
+    foreach ($view->args as $id => $view_arg) {
+      ++$count;
+      if ($view_arg == $arg && $view->argument[$id]['id'] == $argdata['id']) {
+        if ($count != $max) {
+          $view_args[] = $argdata['wildcard'];
+        }
+      }
+      else {
+        $view_args[] = $view_arg;
+      }
+    }
+    $view->feed_url = views_get_url($view, $view_args);
+  }
+  else if ($op == 'post_view' && $view->build_type != 'block') {
+    $args = views_post_view_make_args($view, $arg, 'node_feed');
+    $url = views_get_url($view, $args);
+    $title = views_get_title($view, 'page', $args);
+
+    if ($view->used_filters) {
+      $filters = drupal_query_string_encode($view->used_filters);
+    }
+
+  }
+}
+
+/**
+ * plugin that actually displays an RSS feed
+ */
+function theme_views_node_feed($view, $nodes, $type) {
+  if ($type == 'block') {
+    return;
+  }
+  global $base_url;
+  
+  $feed = views_node_feed_get_feeds($view->node_feed_type);
+  $node_output = '';
+  //append list of nodes using template and ob
+  foreach ($nodes as $node) {
+    // Load the specified node:
+    $node = node_load($node->nid);
+    ob_start();
+    eval('?>' . $feed['node']);
+    $node_output .= ob_get_contents();
+    ob_end_clean();
+  }
+  ob_start();
+  eval('?>' . $feed['wrapper']);
+  $wrapper_output = ob_get_contents();
+  ob_end_clean();
+
+  //combine wrapper and nodes
+  $output = str_replace('***VIEWS_NODE_FEED_ITEMS***', $node_output, $wrapper_output);
+
+  //drupal_set_header('Content-Type: text/xml; charset=utf-8');
+  print $output;
+  module_invoke_all('exit');
+  exit; 
+}
+
+function theme_views_node_feed_admin($feeds) {
+  $output = '';
+  $output .= '<p>' . l(t('Add new node feed'), 'admin/settings/views_node_feed/edit/new') . '</p>';
+  
+  $output .= '<p>';
+  if (count($feeds) == 0) {
+    $output .= t("No existing node feeds");
+  }
+  else {
+    $header = array(t('Identifier'), t('Actions'));
+    $rows = array();
+    foreach ($feeds as $ident) {
+      $rows[] = array($ident, l(t('Edit'), 'admin/settings/views_node_feed/edit/'.$ident) . ' / ' . l(t('Delete'), 'admin/settings/views_node_feed/delete/'.$ident));
+    }
+    $output .= theme('table', $header, $rows);
+  }
+  $output .= '</p>';
+  
+  return $output;
+}

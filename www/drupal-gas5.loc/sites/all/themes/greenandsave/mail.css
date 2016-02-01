@@ -1,0 +1,63 @@
+#mimemail-body{
+  font-family: "Lucida Grande", "Trebuchet MS", Arial, sans-serif;
+  font-size: 13px;
+  color: #333;
+  background-color: #fff;
+}
+#center{
+  width:610px;
+  margin-left:auto;
+  margin-right:auto;
+  background-color:#fff;
+}
+#main{
+  background-color:#fff;
+}
+h1{
+  font-size:18px;
+}
+h2{
+  font-size:16px;
+}
+#rightsidebar_news .bar .foreground{
+  background-color:#98CB00;
+}
+#rightsidebar_news .poll .text{
+  width:280px;
+  margin-left:auto;
+  margin-right:auto;
+}
+#header_news #portal{
+  margin-right:25px;
+}
+#header_news #portal,
+#header_news #portal a,
+#header_news #portal a:visited,
+#header_news #portal .inlinefoot{
+  color:#fff;
+}
+#leftsidebar_news .views_slideshow_breakout_teasers{
+  display:none;
+  visibility:hidden;
+  height:0px;
+}
+.simplerightbar{
+  font-size:11px;
+}
+.simplenewsbody{
+  width:600px;
+  margin-left:auto;
+  margin-right:auto;
+}
+.node h2 a,
+.node h2 a:visited,
+a,
+a:visited{
+  color:#789F00;
+  text-decoration:none;
+}
+.node h2 a:hover,
+a:hover{
+  text-decoration:underline;
+}
+

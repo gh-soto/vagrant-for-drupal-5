@@ -1,0 +1,11 @@
+; $Id: uc_paypal_buttons.info,v 1.1 2009/04/24 18:30:34 detour Exp $
+name = PayPal Buttons
+description = Adds PayPal Buy Now or Subscription buttons to product pages.
+dependencies = uc_cart uc_order uc_paypal
+package = Ubercart - extra
+
+; Information added by drupal.org packaging script on 2009-04-24
+version = "5.x-1.0"
+project = "uc_paypal_buttons"
+datestamp = "1240598774"
+

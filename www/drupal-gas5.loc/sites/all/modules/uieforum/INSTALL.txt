@@ -1,0 +1,204 @@
+
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+BACKUP YOUR EXISTING UIEFORUM DATABASE TABLES AND FILES IF YOU ARE UPGRADING
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+
+
+Install
+-------
+
+http://drupal.org/node/38829
+http://drupal.org/node/38830
+http://www.unreal.ie
+
+UIEForum is a complete forum system, that is intended to replace the existing
+drupal forum module, and uses its' own tables for the storage of posts, threads and forums.
+
+Send comments to drupal@unreal.ie
+
+
+Contents
+--------
+
+* Requirements
+* Installation
+* Quick Installation
+* Upgrade
+* UIEForum Block
+* Author
+* Maintainer
+* Credits
+
+
+
+Requirements
+------------
+
+This version of the module requires Drupal 5
+
+
+Installation
+------------
+
+0. If the default Drupal forum module is enabled then go to admin >> modules and
+   disable it. This isn't a required step, but it is advised.
+
+1. Place the UIEForum module with all its files and folders under sites/all/modules/uieforum.
+
+2. Enable the new forum module in
+   admin >> modules
+   look for the module called uieforum here and tick the associated radio box
+
+   .install file will automatically run to import the mysql settings needed
+
+2a. Run the update.php file for your site to force uieforum to run its updates, if neccessary
+   http://www.site.com/update.php
+
+3. Configure required permissions in
+   admin >> user management >> access control
+
+4. Set the module settings to your liking in
+   admin >> content management >> uieforum.
+
+
+!VERY IMPORTANT NOTE!
+---------------------
+
+1. Three user groups are included with the base install by default, 'access forum',
+   'post new threads/posts' and 'administer forum'.
+
+   *IMPORTANT*
+   Do NOT modify these 3 groups in any way, they are required for the module to
+   function correctly.
+   The default forum: "Forums" is installed for you.
+
+     * It is EXTREMELY important that this forum is not modified, unless done so via
+       a mysql command prompt - and even then only to change it's name.
+
+     * If its 'ParentForum' is set to ANYTHING except 'NULL' then your webserver
+       _will_ fall over and die a horrible, horrible death.
+       This is due to the recursive functions within the module, they rely on all
+       forums having a ParentForum. The <root> forum's parent, should be null.
+
+     * Multiple root forums is currently NOT possible. Don't try doing it. It won't
+       be a nice experience for you. And I can't be held responsible for your poor
+       little webserver falling over and screaming the rooftops down if you decide to
+       ignore this warning.
+
+
+Configuration Options
+---------------------
+
+0. Your forum will be accessible at http://www.yoursite.com/uieforum - this can be
+   changed! Go to admin >> content management >> uieforum >> configure >> paths, and set
+   the "Forum Access Path:" to whatever you desire. Remember to read the description
+   about the setting below the input box first though.
+
+1. Go to admin >> content management >> uieforum >> configure >> paths ... and set the
+   icon paths to wherever your required set of icons are.
+
+     * This path is relative to the website root directory, and can be anywhere
+       within that structure.
+
+     * This will default to /sites/all//modules/uieforum/uie/ ... if you haven't changed the
+       location of this file, or don't have your own icon sets you'd like to
+       use you can skip this step
+
+     * The same procedure can be used to alter the Smilies and the text
+       formatting (bbcode) icons also.
+
+2. Go to admin >> content management >> uieforum >> add forum and add your first forum.
+   By default, the group 'administer forum' has unrestricted access to the forum
+   module, so be sure to add your admin user to this group in "admin >> user management >> access
+   control >> uieforum"
+
+
+3. To create a private forum, first create the forum, then create a new security group
+   via: admin >> content management >> uieforum >> add group
+   Once created, edit the forum in question to allow access to only your new access
+   group (the private one)
+   Finally, add any users that should have access to this forum to a role within
+   drupal's user access control system.
+
+   Confused? :)
+
+   Example:
+     Create the forum: "Private"
+     Create the forum security group: "forum private"/"forum_private_group"
+     Go to admin >> content management >> uieforum  ... and edit "Private" to allow ONLY the
+        private group access
+     Go to admin >> user management >> access control >> roles ... and add your new drupal role
+     Go to admin >> user management >> access control ... and add your new drupal role to the
+        "forum private" access list
+     Go to admin >> user management >> users >> *user name* ... and add the user in question to your
+        new drupal role.
+     *done* Your user(s) can now access the private forum :)
+   While it may be awkward to follow, it really is extrememly logical in it's
+   functionality - trust me :)
+   I recommened that you try this a few times, and make sure that you understand
+   exactly how it works - as it's likely that this will be one of your first problem
+   areas.
+
+
+4. To change the root breadcrumb (as displayed on the top and bottom of every forum page)
+   you will need to modify the "Forum Title" entry on the congfiguration page
+
+
+Upgrade
+-------
+
+MAKE A BACKUP.
+You have been warned.
+
+This behaviour is not specific to the UIEForum module it's for all Drupal
+modules we just warn because we care :)
+
+1: Backup the existing module folder (/sites/all/modules/uieforum/) in case
+   you have made any changes to the code or files/images/css
+
+2: Extract the uieforum zip to /sites/all/modules/uieforum/
+
+3: Check any new configuration options in admin >> content management >> uieforum
+
+4: All done!
+
+
+
+UIEForum Block
+--------------
+
+1. Go to admin >> site building >> blocks ... and search the list for "uieforum" or 
+   "Recent Forum Posts" ...  hit "configure"
+   The number of recent posts/threads to show in this block can be configured here
+
+
+
+Author
+------
+
+UIE Developers <drupal@unreal.ie>
+
+
+
+Maintainer
+----------
+
+UIE Developers <drupal@unreal.ie>
+
+
+Credits
+-------
+
+The UIEForum module was originally heavily based on the forum.module code. It's structure
+resembles the forum module in quite a few places, and this entire project simply could not
+have been completed were it not for the forum.module file as a building block.
+
+The BBCode module (http://drupal.org/project/bbcode - Goba + Frank) is built into this
+forum system, making it all part + parcel.
+This integration is temporary, and I'm looking at various other solutions to the problem
+
